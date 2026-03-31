@@ -8,4 +8,5 @@ fastapi
 uvicorn
 pydantic
 langchain-deepseek
-
+pdfplumber
+python-multipart

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+import FileUpload from "./file_upload";
 
 function App() {
   // 1. State must live INSIDE the functional component
@@ -9,6 +10,7 @@ function App() {
   const [messages,setmessages] = useState([]);
   const [isLoading,setisLoading] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const sendMessage = async () => {
     if(!input.trim()) return; // Prevent sending empty messages
@@ -210,19 +212,74 @@ function App() {
             )}
           </div>
           
-          <div className="p-4 flex items-center justify-center">
-            <div className="flex items-center bg-[#111111] border border-[#1f1f1f] rounded-full w-full max-w-3xl px-4 py-3 gap-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-              <input
-                type="text"
+          <div className="p-4 flex flex-col gap-3 justify-center items-center">
+            {/* File Preview Area */}
+            {selectedFile && (
+              <div className="flex justify-center w-full">
+                <div className="flex items-center gap-2 bg-[#1a1a1a] border border-[#404040] rounded-lg px-3 py-2 max-w-3xl w-full">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5 text-[#888888] flex-shrink-0"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[#e5e5e5] truncate">{selectedFile.name}</p>
+                    <p className="text-xs text-[#888888]">{(selectedFile.size / 1024).toFixed(2)} KB</p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedFile(null)}
+                    className="flex-shrink-0 p-1 text-[#888888] hover:text-[#e5e5e5] transition-colors"
+                    aria-label="Remove file"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="w-5 h-5"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 11-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex gap-3 bg-[#111111] border border-[#1f1f1f] rounded-full w-full max-w-3xl px-4 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+              {/* File Upload Button */}
+              <FileUpload selectedFile={selectedFile} setSelectedFile={setSelectedFile} />
+              <textarea
                 placeholder="Type your message..."
                 value={input}
-                onChange={(e) => setinput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                className="bg-transparent text-white placeholder:text-[#6b6b6b] flex-1 min-w-0 focus:outline-none focus:ring-0 placeholder:text-sm text-sm"
+                onChange={(e) => {
+                  setinput(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                className="bg-transparent text-white placeholder:text-[#6b6b6b] flex-1 min-w-0 focus:outline-none focus:ring-0 placeholder:text-sm text-sm resize-none max-h-[200px] overflow-y-auto"
+                style={{ height: "40px", fontFamily: "inherit" }}
               />
               <button
                 type="button"
-                className="flex items-center justify-center w-10 h-10 rounded-full bg-[#1c1c1c] hover:bg-[#242424] text-[#cfcfcf] cursor-pointer transition-colors"
+                className="flex items-center justify-center w-10 h-10 rounded-full bg-[#1c1c1c] hover:bg-[#242424] text-[#cfcfcf] cursor-pointer transition-colors flex-shrink-0"
                 aria-label="Send"
                 onClick={sendMessage}
                 disabled={isLoading}
