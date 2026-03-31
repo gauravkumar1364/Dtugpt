@@ -29,11 +29,19 @@ async def chat(req:chat_request):
 
     response = model.invoke(req.message)
 
-    text = response.content
-    leaned_text = re.sub(r"<think>[\s\S]*?</think>", "", text)
-    
+    raw_text = response.content
+
+    thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
+
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+
+    thinking_text = thinking.group(1).strip() if thinking else None
+
+    print("Thinking:", thinking_text if thinking_text else "None")
+        
     return {
-        "reply" : response.content
+        "reply": cleaned,
+        "thinking": thinking_text
     }
 
 

@@ -8,6 +8,7 @@ function App() {
   const [input,setinput] = useState("");
   const [messages,setmessages] = useState([]);
   const [isLoading,setisLoading] = useState(false);
+  const [expandedThinking, setExpandedThinking] = useState(null);
 
   const sendMessage = async () => {
     if(!input.trim()) return; // Prevent sending empty messages
@@ -24,7 +25,7 @@ function App() {
         body: JSON.stringify({ message: usermessage }),
       });
       const data = await response.json();
-      setmessages((prev)=>[...prev,{role:"assistant",content:data.reply}]);
+      setmessages((prev)=>[...prev,{role:"assistant",content:data.reply, thinking:data.thinking}]);
     }catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -162,14 +163,40 @@ function App() {
                   key={index}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div
-                    className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-lg ${
-                      msg.role === "user"
-                        ? "bg-[#1f6feb] text-white rounded-br-none"
-                        : "bg-[#2d2d2d] text-[#e5e5e5] rounded-bl-none"
-                    }`}
-                  >
-                    <p className="text-sm break-words">{msg.content}</p>
+                  <div className="max-w-xs lg:max-w-md xl:max-w-lg">
+                    <div
+                      className={`px-4 py-2 rounded-lg ${
+                        msg.role === "user"
+                          ? "bg-[#1f6feb] text-white rounded-br-none"
+                          : "bg-[#2d2d2d] text-[#e5e5e5] rounded-bl-none"
+                      }`}
+                    >
+                      <p className="text-sm break-words">{msg.content}</p>
+                    </div>
+                    {msg.thinking && (
+                      <div className="mt-2 flex items-center">
+                        <button
+                          onClick={() => setExpandedThinking(expandedThinking === index ? null : index)}
+                          className="flex items-center gap-2 text-xs text-[#888888] hover:text-[#aaaaaa] transition-colors"
+                        >
+                          <svg
+                            className={`w-4 h-4 transition-transform ${expandedThinking === index ? "rotate-90" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          Show Thinking
+                        </button>
+                      </div>
+                    )}
+                    {expandedThinking === index && msg.thinking && (
+                      <div className="mt-2 p-3 bg-[#1a1a1a] rounded border border-[#404040] text-xs text-[#999999] break-words">
+                        <p className="font-semibold mb-2 text-[#b0b0b0]">Thinking Process:</p>
+                        <p>{msg.thinking}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
