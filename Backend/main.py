@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import numpy as np
 
 from fastapi import FastAPI, UploadFile, File
@@ -92,30 +93,86 @@ def extract_text_from_pdf(file_bytes):
 # ------------------ CLEAN TEXT ------------------
 
 def clean_text(text):
+    """Pre-process text to remove OCR artifacts before LLM processing"""
+    # Collapse multiple spaces
     text = re.sub(r'\s+', ' ', text)
+    
+    # Remove weird OCR characters (keep only alphanumeric, ?, ., and spaces)
     text = re.sub(r'[^a-zA-Z0-9?. ]', '', text)
-    return text
+    
+    # Remove long number sequences (likely page numbers or artifacts)
+    text = re.sub(r'\d{4,}', '', text)
+    
+    return text.strip()
 
-# ------------------ QUESTION EXTRACTION ------------------
+# ------------------ LLM-BASED CLEANING & EXTRACTION ------------------
 
-def extract_questions(text):
+def clean_and_extract_questions_with_llm(text):
+    """
+    Use LLM to intelligently clean OCR noise and extract questions
+    """
+    import json
+    
+    # Pre-clean the text first
+    cleaned_text = clean_text(text)
+    
+    prompt = f"""
+You are an expert at extracting ALL questions from exam papers.
+
+Your task:
+1. Extract EVERY question and sub-question (including a, b, c parts)
+2. Treat each sub-part as a separate question
+3. Fix OCR errors and clean up text
+4. Remove noise and incomplete fragments
+
+Raw text from exam paper:
+---
+{cleaned_text[:8000]}
+---
+
+CRITICAL RULES:
+- Extract Q.1(a), Q.1(b), Q.2(a), Q.2(b), etc. as SEPARATE questions
+- If a question has parts (a), (b), (c), extract each part individually
+- Include the question number in the extracted question
+- Remove standalone numbers, abbreviations, incomplete words
+- Each extracted question must be 8+ words
+- Return ALL questions found, not just first few
+
+Example from paper with 3 questions, 2 parts each:
+["Q1(a) What are the properties of linear block codes?", "Q1(b) How would you generate a linear code?", "Q2(a) What is Entropy?", "Q2(b) Show that entropy is maximum when all messages are equiprobable"]
+
+Return ONLY a JSON array of strings - no other text.
+"""
+
+    try:
+        response = model.invoke(prompt)
+        response_text = response.content.strip()
+        
+        # Extract JSON from response
+        json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+        if json_match:
+            questions = json.loads(json_match.group())
+            # Filter empty/short strings
+            questions = [q.strip() for q in questions if q.strip() and len(q) > 8]
+            return questions
+    except Exception as e:
+        print(f"LLM extraction error: {e}")
+    
+    # Fallback to basic extraction if LLM fails
+    return extract_questions_fallback(cleaned_text)
+
+def extract_questions_fallback(text):
+    """Fallback regex-based extraction"""
     questions = []
-
-    # Split by sentences
-    lines = re.split(r'\.|\n', text)
-
+    lines = re.split(r'\.\s+|\n', text)
+    
     for line in lines:
         line = line.strip()
-
-        if not line:
+        if not line or len(line) < 10:
             continue
-
-        if '?' in line:
+        if '?' in line or re.match(r'^[a-z0-9]+\s*\(', line, re.IGNORECASE):
             questions.append(line)
-
-        elif re.match(r'^\d+', line):
-            questions.append(line)
-
+    
     return list(set(questions))
 
 # ------------------ STORE EMBEDDINGS ------------------
@@ -158,19 +215,16 @@ async def upload_file(file: UploadFile = File(...)):
     try:
         file_bytes = await file.read()
 
-        # STEP 1: Extract text
+        # STEP 1: Extract raw text from PDF
         text = extract_text_from_pdf(file_bytes)
 
-        # STEP 2: Clean
-        cleaned_text = clean_text(text)
+        # STEP 2: Use LLM to clean & extract questions (IMPROVED)
+        questions = clean_and_extract_questions_with_llm(text)
 
-        # STEP 3: Extract questions
-        questions = extract_questions(cleaned_text)
-
-        # STEP 4: Subject (basic for now)
+        # STEP 3: Subject from filename
         subject = file.filename.split('.')[0]
 
-        # STEP 5: Store embeddings
+        # STEP 4: Store embeddings
         store_questions(subject, questions)
 
         return {
