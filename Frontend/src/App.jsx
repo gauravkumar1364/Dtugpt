@@ -35,6 +35,30 @@ function App() {
     }
   };
 
+  const handleFileUpload = (uploadData) => {
+    if (uploadData.error) {
+      setmessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Error uploading file: ${uploadData.error}`,
+          thinking: null,
+        },
+      ]);
+      return;
+    }
+
+    // Add extracted text summary
+    setmessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: `📄 **File Uploaded Successfully**\n\nExtracted Text Preview:\n"${uploadData.extracted_text}..."\n\n**AI Analysis:**\n${uploadData.reply}`,
+        thinking: uploadData.thinking,
+      },
+    ]);
+  };
+
   return (
     <div className="bg-[#0b0b0b] text-[#e5e5e5] w-full h-screen flex flex-col">
       <div className="flex flex-1 overflow-hidden font-sans bg-[#0b0b0b]">
@@ -259,7 +283,7 @@ function App() {
             
             <div className="flex gap-3 bg-[#111111] border border-[#1f1f1f] rounded-full w-full max-w-3xl px-4 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
               {/* File Upload Button */}
-              <FileUpload selectedFile={selectedFile} setSelectedFile={setSelectedFile} />
+              <FileUpload selectedFile={selectedFile} setSelectedFile={setSelectedFile} onUpload={handleFileUpload} />
               <textarea
                 placeholder="Type your message..."
                 value={input}

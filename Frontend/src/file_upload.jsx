@@ -1,28 +1,45 @@
 import React, { useRef } from "react";
 import axios from "axios";
 
-const FileUpload = ({ selectedFile, setSelectedFile }) => {
+const FileUpload = ({ selectedFile, setSelectedFile, onUpload }) => {
   const fileInputRef = useRef();
 
-  const onFileChange = (e) => {
-    setSelectedFile(e.target.files[0]);
+  const onFileChange = async (e) => {
+    const file = e.target.files[0];
+    setSelectedFile(file);
+    
+    // Auto-upload when file is selected
+    if (file) {
+      await onFileUpload(file);
+    }
   };
 
-  const onFileUpload = async () => {
-    if (!selectedFile) {
+  const onFileUpload = async (file) => {
+    if (!file) {
       alert("Please select a file first");
       return;
     }
 
     const formData = new FormData();
-    formData.append("myfile", selectedFile);
+    formData.append("file", file);
 
     try {
-      await axios.post("http://127.0.0.1:8000/uploadfile", formData);
+      const response = await axios.post("http://127.0.0.1:8000/uploadfile", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      
+      // Call the callback with the response
+      if (onUpload) {
+        onUpload(response.data);
+      }
+      
       setSelectedFile(null);
-      alert("File uploaded successfully");
     } catch (err) {
       console.error(err);
+      alert("Error uploading file: " + (err.response?.data?.error || err.message));
+      setSelectedFile(null);
     }
   };
 
@@ -34,12 +51,14 @@ const FileUpload = ({ selectedFile, setSelectedFile }) => {
         ref={fileInputRef}
         onChange={onFileChange}
         className="hidden"
+        accept=".pdf"
       />
 
       {/* Upload icon trigger */}
       <div
         onClick={() => fileInputRef.current.click()}
         className="p-2 bg-[#1c1c1c] hover:bg-[#242424] text-[#cfcfcf] rounded-full cursor-pointer transition-colors"
+        title="Upload PDF file"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

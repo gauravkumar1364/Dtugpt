@@ -10,3 +10,10 @@ pydantic
 langchain-deepseek
 pdfplumber
 python-multipart
+faiss-cpu 
+sentence-transformers 
+pytesseract
+pillow
+pdf2image
+sentence-transformers 
+faiss-cpu
