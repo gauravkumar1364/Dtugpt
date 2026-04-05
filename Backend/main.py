@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -17,8 +18,27 @@ from services.analytics import get_most_asked_questions, get_subjects_stats, get
 # Load environment variables
 load_dotenv()
 
-# Initialize FastAPI
-app = FastAPI(title="DTU PYQ Assistant")
+# Initialize LLM
+llm_model = ChatGroq(model="qwen/qwen3-32b")
+
+
+# ==================== LIFESPAN EVENTS ====================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events using lifespan context manager"""
+    # Startup
+    load_questions_from_db()
+    print("✅ DTU PYQ Assistant started")
+    
+    yield
+    
+    # Shutdown (if needed)
+    print("🛑 DTU PYQ Assistant shutting down")
+
+
+# Initialize FastAPI with lifespan
+app = FastAPI(title="DTU PYQ Assistant", lifespan=lifespan)
 
 # CORS middleware
 app.add_middleware(
@@ -28,18 +48,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialize LLM
-llm_model = ChatGroq(model="qwen/qwen3-32b")
-
-
-# ==================== STARTUP ====================
-
-@app.on_event("startup")
-async def startup():
-    """Load data on startup"""
-    load_questions_from_db()
-    print("✅ DTU PYQ Assistant started")
 
 
 # ==================== ROUTES ====================
