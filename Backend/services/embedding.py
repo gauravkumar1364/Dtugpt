@@ -16,7 +16,7 @@ questions_db = []
 
 def store_questions(subject: str, questions: list[str]) -> None:
     """
-    Encode questions and store in FAISS + in-memory DB
+    Encode questions and store in FAISS + MongoDB (with duplicate check)
     """
     global questions_db, index
     
@@ -28,21 +28,27 @@ def store_questions(subject: str, questions: list[str]) -> None:
     
     # Store in memory and FAISS
     for i, q in enumerate(questions):
+        # Check for duplicates in MongoDB
+        if questions_collection.find_one({"question": q}):
+            print(f"⏭️  Skipping duplicate: {q[:50]}...")
+            continue
+        
+        # Insert into MongoDB
+        questions_collection.insert_one({
+            "subject": subject,
+            "question": q,
+            "embedding": embeddings[i].tolist()
+        })
+        
+        # Add to in-memory DB
         questions_db.append({
             "subject": subject,
             "question": q,
             "embedding": embeddings[i].tolist()
         })
         
-        # Also store in MongoDB
-        questions_collection.insert_one({
-            "subject": subject,
-            "question": q,
-            "embedding": embeddings[i].tolist()
-        })
-    
-    # Add to FAISS index
-    index.add(np.array(embeddings, dtype=np.float32))
+        # Add to FAISS index
+        index.add(np.array([embeddings[i]], dtype=np.float32))
 
 
 def search_similar(query: str, top_k: int = 5) -> list[dict]:
@@ -70,15 +76,40 @@ def search_similar(query: str, top_k: int = 5) -> list[dict]:
 def load_questions_from_db() -> None:
     """
     Load all questions from MongoDB into memory/FAISS on startup
+    Critical for data persistence across restarts
     """
     global questions_db, index
+    
+    questions_db.clear()
+    index = faiss.IndexFlatL2(dimension)
     
     all_questions = list(questions_collection.find({}, {"_id": 0}))
     
     if not all_questions:
+        print("ℹ️  No questions in MongoDB yet")
         return
     
-    # Rebuild FAISS index
+    # Extract questions that need embeddings
+    questions_to_embed = []
+    for doc in all_questions:
+        if "embedding" not in doc or not doc["embedding"]:
+            questions_to_embed.append(doc["question"])
+    
+    # Generate embeddings for missing ones
+    if questions_to_embed:
+        print(f"🔄 Generating embeddings for {len(questions_to_embed)} questions...")
+        new_embeddings = embed_model.encode(questions_to_embed)
+        
+        for question, embedding in zip(questions_to_embed, new_embeddings):
+            questions_collection.update_one(
+                {"question": question},
+                {"$set": {"embedding": embedding.tolist()}}
+            )
+    
+    # Reload all questions with complete embeddings
+    all_questions = list(questions_collection.find({}, {"_id": 0}))
+    
+    # Build FAISS index
     embeddings = []
     for doc in all_questions:
         questions_db.append(doc)
@@ -86,4 +117,4 @@ def load_questions_from_db() -> None:
     
     if embeddings:
         index.add(np.array(embeddings, dtype=np.float32))
-        print(f"Loaded {len(embeddings)} questions from MongoDB")
+        print(f"✅ Loaded {len(embeddings)} questions into FAISS from MongoDB")
