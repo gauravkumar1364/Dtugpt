@@ -17,3 +17,4 @@ pillow
 pdf2image
 sentence-transformers 
 faiss-cpu
+pymongo
