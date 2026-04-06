@@ -1,6 +1,7 @@
 import os
 import re
 from contextlib import asynccontextmanager
+from typing import Optional
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -53,9 +54,103 @@ app.add_middleware(
 
 # ==================== ROUTES ====================
 
+# Query Interceptor - Route certain queries to MongoDB instead of LLM
+def intercept_query(message: str) -> Optional[dict]:
+    """
+    Intercept queries asking for questions/topics and route to MongoDB
+    Returns: dict with MongoDB results or None to pass to LLM
+    """
+    msg_lower = message.lower().strip()
+    
+    # Pattern: "questions for [subject]" or "most asked [subject]"
+    # Extract subject keywords
+    patterns = [
+        r"(?:questions|pyq|past year|previous|topic)s?\s+(?:for|on|in|about)?\s+(\w+)",
+        r"(?:most asked|frequently asked|common).*?(?:for|on|in)?\s+(\w+)",
+        r"(\w+).*?(?:questions|topics|pyq)",
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, msg_lower)
+        if match:
+            subject = match.group(1).lower()
+            
+            # Query MongoDB for questions with this subject
+            questions = get_most_asked_questions(subject=subject, limit=10)
+            
+            if questions:
+                # Format for structured response
+                return {
+                    "type": "questions",
+                    "subject": subject,
+                    "data": questions
+                }
+    
+    return None
+
+
+def format_mongodb_response(intercept_data: dict) -> dict:
+    """
+    Format MongoDB results into structured response format
+    """
+    subject = intercept_data.get("subject", "Unknown")
+    questions = intercept_data.get("data", [])
+    
+    if not questions:
+        return {
+            "title": "",
+            "summary": f"No questions found for subject: {subject}",
+            "sections": [],
+            "key_points": [],
+            "formatted_markdown": ""
+        }
+    
+    # Build sections with questions grouped
+    sections = []
+    
+    # Add overview section
+    overview_bullets = [f"{q['question'][:100]}..." for q in questions[:5]]
+    sections.append({
+        "header": f"Top Questions for {subject.upper()}",
+        "level": 2,
+        "content": f"Found {len(questions)} question(s) for {subject}",
+        "bullets": overview_bullets
+    })
+    
+    # Add all questions if more than 5
+    if len(questions) > 5:
+        more_bullets = [f"{q['question'][:100]}..." for q in questions[5:]]
+        sections.append({
+            "header": "Additional Questions",
+            "level": 2,
+            "content": "",
+            "bullets": more_bullets
+        })
+    
+    return {
+        "title": "",
+        "summary": f"Questions for {subject}",
+        "sections": sections,
+        "key_points": [q["question"] for q in questions[:3]],
+        "formatted_markdown": "\n".join([f"- {q['question']}" for q in questions])
+    }
+
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
     """Chat endpoint - general conversation with structured output"""
+    
+    # INTERCEPT: Check if query is asking for questions/topics
+    intercept_result = intercept_query(req.message)
+    if intercept_result:
+        # Query intercepted - return MongoDB results instead of LLM
+        structured = format_mongodb_response(intercept_result)
+        return {
+            "reply": structured,
+            "thinking": None
+        }
+    
+    # Regular LLM conversation
     response = llm_model.invoke(req.message)
     raw_text = response.content
 

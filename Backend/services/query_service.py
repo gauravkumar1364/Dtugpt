@@ -15,26 +15,42 @@ async def answer_query(query: str, context_questions: list[dict]) -> dict:
     Uses subject context if available
     Returns structured and readable response
     """
-    # Build context from matched questions
-    context = "\n".join([f"- Q: {q['question']}" for q in context_questions])
+    # Build context from matched questions with better formatting
+    if context_questions:
+        questions_list = "\n".join([f"- {q['question']}" for q in context_questions])
+        context = f"""
+Previous Year Questions on Similar Topics:
+{questions_list}
+
+These questions help establish the topic coverage and expected answer depth."""
+    else:
+        context = ""
     
     # Extract subject from first question if available
     subject_context = ""
     if context_questions and "subject" in context_questions[0]:
-        subject_context = f"\nSubject: {context_questions[0]['subject']}"
+        subject_context = f" ({context_questions[0]['subject']})"
     
-    prompt = f"""
-You are a DTU exam assistant that helps students with exam preparation.
+    prompt = f"""You are a DTU exam assistant helping students prepare for exams.
 
-Based on previous year questions from this subject:{subject_context}
+Your task: Answer the student's question comprehensively and clearly.
+
+{f'Subject: {context_questions[0]["subject"]}' if context_questions and "subject" in context_questions[0] else ''}
 
 {context}
 
-Answer the student's query:
+Student's Question:
 {query}
 
-Provide a concise, exam-oriented answer with clear explanations using clear sections and bullet points.
-"""
+Instructions:
+1. Answer based on the question topic and similar previous year questions
+2. Use the previous questions as reference for scope and depth
+3. Structure your answer with clear sections and bullet points
+4. Include relevant facts, concepts, and explanations
+5. Keep it exam-oriented and concise
+6. Match the technical depth shown in previous questions
+
+Answer:"""
     
     response = llm_model.invoke(prompt)
     raw_answer = response.content
