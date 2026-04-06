@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./App.css";
 import FileUpload from "./file_upload";
+import MessageDisplay from "./MessageDisplay";
 
 function App() {
   // 1. State must live INSIDE the functional component
@@ -27,7 +28,9 @@ function App() {
         body: JSON.stringify({ message: usermessage }),
       });
       const data = await response.json();
-      setmessages((prev)=>[...prev,{role:"assistant",content:data.reply, thinking:data.thinking}]);
+      // Handle both new structured format and legacy string format
+      const responseContent = data.reply?.title ? data.reply : (typeof data.reply === 'string' ? data.reply : data.reply?.formatted_markdown || data.reply);
+      setmessages((prev)=>[...prev,{role:"assistant",content: responseContent, thinking:data.thinking}]);
     }catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -190,14 +193,16 @@ function App() {
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div className="max-w-xs lg:max-w-md xl:max-w-lg">
-                    <div
+                  <div
                       className={`px-4 py-2 rounded-lg ${
                         msg.role === "user"
                           ? "bg-[#1f6feb] text-white rounded-br-none"
                           : "bg-[#2d2d2d] text-[#e5e5e5] rounded-bl-none"
                       }`}
                     >
-                      <p className="text-sm break-words">{msg.content}</p>
+                      <div className="text-sm break-words">
+                        <MessageDisplay message={msg.content} />
+                      </div>
                     </div>
                     {msg.thinking && (
                       <div className="mt-2 flex items-center">

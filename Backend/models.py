@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class ChatRequest(BaseModel):
@@ -7,6 +8,7 @@ class ChatRequest(BaseModel):
 
 class AskRequest(BaseModel):
     query: str
+    subject: Optional[str] = None  # Optional subject filter
 
 
 class QuestionDocument(BaseModel):

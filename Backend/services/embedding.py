@@ -51,9 +51,10 @@ def store_questions(subject: str, questions: list[str]) -> None:
         index.add(np.array([embeddings[i]], dtype=np.float32))
 
 
-def search_similar(query: str, top_k: int = 5) -> list[dict]:
+def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict]:
     """
     Search for similar questions using FAISS
+    Optionally filter by subject
     """
     if len(questions_db) == 0:
         return []
@@ -61,14 +62,24 @@ def search_similar(query: str, top_k: int = 5) -> list[dict]:
     # Encode query
     query_embedding = embed_model.encode([query])
     
-    # Search in FAISS
-    distances, indices = index.search(np.array(query_embedding, dtype=np.float32), top_k)
+    # Search in FAISS (get more results to account for filtering)
+    search_k = top_k * 3 if subject else top_k
+    distances, indices = index.search(np.array(query_embedding, dtype=np.float32), min(search_k, len(questions_db)))
     
-    # Get results
+    # Get results and filter by subject if specified
     results = []
     for idx in indices[0]:
         if idx < len(questions_db):
-            results.append(questions_db[idx])
+            doc = questions_db[idx]
+            
+            # Subject filter
+            if subject and doc.get("subject", "").lower() != subject.lower():
+                continue
+            
+            results.append(doc)
+            
+            if len(results) >= top_k:
+                break
     
     return results
 

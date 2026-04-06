@@ -13,7 +13,8 @@ from models import ChatRequest, AskRequest
 from services.pdf_service import extract_text_from_pdf, clean_and_extract_questions_with_llm
 from services.embedding import store_questions, search_similar, load_questions_from_db
 from services.query_service import answer_query
-from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count
+from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count, get_most_asked_topics
+from services.response_formatter import structure_llm_output
 
 # Load environment variables
 load_dotenv()
@@ -54,16 +55,20 @@ app.add_middleware(
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    """Chat endpoint - general conversation"""
+    """Chat endpoint - general conversation with structured output"""
     response = llm_model.invoke(req.message)
     raw_text = response.content
 
+    # Extract thinking if present
     thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
     thinking_text = thinking.group(1).strip() if thinking else None
 
+    # Structure the response
+    structured = structure_llm_output(cleaned, return_format="json")
+
     return {
-        "reply": cleaned,
+        "reply": structured,
         "thinking": thinking_text
     }
 
@@ -80,8 +85,21 @@ async def upload_file(file: UploadFile = File(...)):
         # Extract questions using LLM
         questions = clean_and_extract_questions_with_llm(text)
 
-        # Get subject from filename
-        subject = file.filename.split('.')[0]
+        # Extract subject from filename (handle multiple formats)
+        # Formats: "CO305_ITC_2018.pdf", "dbms-normalization.pdf", "signals.pdf"
+        filename = file.filename.lower()
+        
+        # Remove extension
+        filename_clean = filename.split('.')[0]
+        
+        # Try to extract meaningful subject
+        # Priority: First word or pattern before underscore/hyphen
+        if '_' in filename_clean:
+            subject = filename_clean.split('_')[0]  # e.g., "CO305" from "CO305_ITC_2018"
+        elif '-' in filename_clean:
+            subject = filename_clean.split('-')[0]  # e.g., "dbms" from "dbms-normalization"
+        else:
+            subject = filename_clean  # Use entire filename if no pattern
 
         # Store in DB and FAISS
         store_questions(subject, questions)
@@ -99,10 +117,16 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.post("/ask")
 async def ask(req: AskRequest):
-    """Ask question - searches PYQs and generates answer"""
+    """Ask question - searches PYQs and generates answer (with optional subject filter)"""
     try:
-        # Search similar questions
-        results = search_similar(req.query, top_k=5)
+        # Search similar questions (optionally filtered by subject)
+        results = search_similar(req.query, top_k=5, subject=req.subject)
+
+        if not results:
+            return {
+                "answer": "No matching questions found",
+                "matched_questions": []
+            }
 
         # Generate answer using LLM
         answer_response = await answer_query(req.query, results)
@@ -121,6 +145,23 @@ async def get_important_questions(subject: str = None, limit: int = 10):
         return {
             "status": "success",
             "questions": questions
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/trending-topics")
+async def get_trending_topics(subject: str = None, limit: int = 10):
+    """
+    Get most repeated topics using clustering
+    Groups similar questions together to find trending topics
+    """
+    try:
+        topics = get_most_asked_topics(subject=subject, limit=limit)
+        return {
+            "status": "success",
+            "trending_topics": topics,
+            "description": "Topics grouped by similarity (threshold: 0.75)"
         }
     except Exception as e:
         return {"error": str(e)}
