@@ -15,7 +15,7 @@ from services.pdf_service import extract_text_from_pdf, clean_and_extract_questi
 from services.embedding import store_questions, search_similar, load_questions_from_db
 from services.query_service import answer_query
 from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count, get_most_asked_topics, get_analyzed_questions
-from services.response_formatter import structure_llm_output
+from services.response_formatter import structure_llm_output, clean_markdown
 
 # Load environment variables
 load_dotenv()
@@ -177,22 +177,33 @@ def format_mongodb_response(intercept_data: dict) -> dict:
         for t in topics_list
     ])
     
-    prompt = f"""Format this exam analysis data for a student:
+    prompt = f"""You are DTUGPT.
 
-Subject: {subject}
-Total Questions: {total}
-Unique Topics: {unique}
+Format frequency analysis for: {subject}
 
 Topics by Frequency:
 {topic_summary}
 
-Task: Create a SHORT, focused response with:
-1. Most Important Topics (top 3-5 by frequency only)
-2. Study Priority (high/medium/low)
-3. Brief frequency breakdown
+Generate Output:
 
-Keep it UNDER 5 bullet points. Focus on quick reference.
-Do NOT repeat raw questions. Keep response SHORT."""
+## Important Topics
+- [Topic name] - Frequency: High/Medium/Low
+- [Topic name] - Frequency: High/Medium/Low
+(Only top 3-5 topics)
+
+## Study Focus
+- Prioritize high frequency topics
+- Quick revision checklist for exam
+
+## Statistics
+- Total Questions: {total}
+- Unique Topics: {unique}
+
+Rules:
+- Clean format, no extra text
+- Only list non-zero frequency topics
+- Help student study efficiently
+- No raw question text"""
     
     print(f"\n📊 Sending CLEAN GROUPED DATA to LLM (not raw questions)")
     print(f"Topics: {len(topics_list)}, Total Questions: {total}")
@@ -231,27 +242,34 @@ async def chat(req: ChatRequest):
     # Get context from similar questions
     context = get_context_for_detailed(req.message)
     
-    detailed_prompt = f"""You are DTUGPT, an expert academic assistant for exam preparation.
+    detailed_prompt = f"""You are DTUGPT.
 
-Your task: Answer the student's question concisely and clearly.
+Generate structured study notes for this question: {req.message}
 
-Context (Similar questions from past papers):
-{context if context else "No specific context available"}
+{f'Related PYQ Topics: {context}' if context else ''}
 
-Student's Question:
-{req.message}
+Format Output Exactly:
 
-Requirements:
-1. Keep answer concise (max 5-6 bullet points)
-2. Format:
-   - Main Concept (1-2 lines)
-   - Key Points (3-5 bullets)
-   - Important for Exam (1-2 key takeaways)
-3. Use bullet points, not paragraphs
-4. Include formulas only if essential
-5. Focus on exam relevance
+## Concept
+- Clear definition or main idea (2-3 lines max)
 
-Keep it SHORT and ORGANIZED, not lengthy."""
+## Key Points
+- Point 1
+- Point 2
+- Point 3
+(Only essential points, no redundancy)
+
+## Exam Focus
+- What to remember for exams
+- Common question patterns
+- Important formula (if any)
+
+Rules:
+- Be concise and direct
+- No repetition between sections
+- Use bullet format only
+- No lengthy explanations
+- Keep total length under 150 words"""
     
     # Call LLM with detailed prompt
     response = llm_model.invoke(detailed_prompt)

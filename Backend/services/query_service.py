@@ -35,28 +35,35 @@ These questions help establish the topic coverage and expected answer depth."""
     if context_questions and "subject" in context_questions[0]:
         subject_context = f" ({context_questions[0]['subject']})"
     
-    prompt = f"""You are a DTU exam assistant helping students prepare for exams.
+    prompt = f"""You are DTUGPT.
 
-Your task: Answer the student's question clearly and concisely.
+Answer: {query}
 
 {f'Subject: {context_questions[0]["subject"]}' if context_questions and "subject" in context_questions[0] else ''}
+{context if context else ''}
 
-{context}
+Format Output:
 
-Student's Question:
-{query}
+## Concept
+- Main definition or idea (2-3 lines only)
 
-Instructions:
-1. Keep answer SHORT (5-7 bullet points max)
-2. Structure as:
-   - Definition/Concept (1-2 lines)
-   - Key Points (3-4 bullets)
-   - Exam Tip (1 key takeaway)
-3. Use bullet format, not paragraphs
-4. Include formulas only if essential
-5. Match scope of previous year questions
+## Key Points
+- Essential point 1
+- Essential point 2
+- Essential point 3
+(Only crucial concepts, no repetition)
 
-Answer (SHORT and FORMATTED):"""  
+## Exam Focus
+- Important for exam
+- Common question format
+- Key formula or formula (if needed)
+
+Rules:
+- Direct and concise
+- No verbose explanations
+- Bullet points only
+- Match exam scope
+- Under 150 words total"""  
     
     response = llm_model.invoke(prompt)
     raw_answer = response.content
