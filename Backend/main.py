@@ -52,6 +52,46 @@ app.add_middleware(
 )
 
 
+# ==================== MODE DETECTION ====================
+
+def detect_query_mode(message: str) -> str:
+    """
+    Detect if query is analysis mode or detailed mode
+    
+    Analysis mode: "most asked", "important", "frequency", "topics"
+    Detailed mode: everything else (specific questions, explanations)
+    """
+    msg_lower = message.lower()
+    
+    analysis_keywords = [
+        "most asked", "important", "frequency", "topics", 
+        "trending", "repeated", "common", "usually", "often",
+        "statistics", "summary", "overview"
+    ]
+    
+    for keyword in analysis_keywords:
+        if keyword in msg_lower:
+            return "analysis"
+    
+    return "detailed"
+
+
+def get_context_for_detailed(query: str) -> str:
+    """
+    For detailed mode, search for similar questions to use as context
+    """
+    results = search_similar(query, top_k=5)
+    
+    if not results:
+        return ""
+    
+    context = "Similar questions from PYQs:\n"
+    for q in results:
+        context += f"- {q['question']}\n"
+    
+    return context
+
+
 # ==================== ROUTES ====================
 
 # Query Interceptor - Route certain queries to MongoDB instead of LLM
@@ -164,23 +204,57 @@ Do NOT repeat raw question text. Keep it clean and organized."""
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    """Chat endpoint - general conversation with structured output"""
+    """
+    Chat endpoint with 2 modes:
+    1. Analysis Mode - for "most asked questions" type queries
+    2. Detailed Mode - for specific questions and explanations
+    """
     
-    # INTERCEPT: Check if query is asking for questions/topics
-    intercept_result = intercept_query(req.message)
-    if intercept_result:
-        # Query intercepted - return MongoDB results instead of LLM
-        structured = format_mongodb_response(intercept_result)
-        return {
-            "reply": structured,
-            "thinking": None
-        }
+    # Detect query mode
+    mode = detect_query_mode(req.message)
     
-    # Regular LLM conversation
-    response = llm_model.invoke(req.message)
+    # ANALYSIS MODE: Return frequency analysis
+    if mode == "analysis":
+        intercept_result = intercept_query(req.message)
+        if intercept_result:
+            structured = format_mongodb_response(intercept_result)
+            return {
+                "reply": structured,
+                "thinking": None
+            }
+    
+    # DETAILED MODE: Answer with exam-style details
+    # Get context from similar questions
+    context = get_context_for_detailed(req.message)
+    
+    detailed_prompt = f"""You are DTUGPT, an expert academic assistant for exam preparation.
+
+Your task: Answer the student's question in detail using exam-preparation style.
+
+Context (Similar questions from past papers):
+{context if context else "No specific context available"}
+
+Student's Question:
+{req.message}
+
+Requirements:
+1. Structure your answer clearly with numbered or bullet points
+2. Include key concepts, formulas, and explanations
+3. Provide study focus areas if applicable
+4. Format as:
+   - Main concept explanation (2-3 lines)
+   - Key points/formulas
+   - Important notes for exam
+5. Be detailed but organized
+6. Focus on exam preparation
+
+Provide a comprehensive, well-structured answer."""
+    
+    # Call LLM with detailed prompt
+    response = llm_model.invoke(detailed_prompt)
     raw_text = response.content
 
-    # Extract thinking if present
+    # Extract and remove thinking if present
     thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
     thinking_text = thinking.group(1).strip() if thinking else None
