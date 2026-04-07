@@ -105,7 +105,8 @@ def get_most_asked_questions(subject: str = None, limit: int = 10) -> list[dict]
     """
     query = {}
     if subject:
-        query = {"subject": subject}
+        # Substring match for subject (case-insensitive)
+        query = {"subject": {"$regex": subject, "$options": "i"}}
     
     # Count questions by content
     all_questions = list(questions_collection.find(query, {"question": 1, "subject": 1}))

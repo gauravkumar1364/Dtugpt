@@ -62,30 +62,37 @@ def intercept_query(message: str) -> Optional[dict]:
     """
     msg_lower = message.lower().strip()
     
-    # Pattern: "questions for [subject]" or "most asked [subject]"
-    # Extract subject keywords
+    # More flexible regex patterns to catch various query formats
     patterns = [
-        r"(?:questions|pyq|past year|previous|topic)s?\s+(?:for|on|in|about)?\s+(\w+)",
-        r"(?:most asked|frequently asked|common).*?(?:for|on|in)?\s+(\w+)",
-        r"(\w+).*?(?:questions|topics|pyq)",
+        r"(?:questions|pyq|past year|previous|topic)s?\s+(?:for|on|in|about)?\s+([a-z0-9\s]+?)(?:\?|$)",
+        r"(?:most asked|frequently asked|common|give me).*?(?:for|on|in)?\s+([a-z0-9\s]+?)(?:\?|$)",
+        r"([a-z0-9\s]+?)\s+(?:questions|topics|pyq)",
     ]
     
     for pattern in patterns:
         match = re.search(pattern, msg_lower)
         if match:
-            subject = match.group(1).lower()
+            subject = match.group(1).strip()
+            if not subject or len(subject) < 2:
+                continue
+            
+            print(f"🔍 Interceptor: Testing subject='{subject}'")
             
             # Query MongoDB for questions with this subject
             questions = get_most_asked_questions(subject=subject, limit=10)
             
             if questions:
+                print(f"✅ INTERCEPTED: Query='{message}' -> Subject='{subject}' -> Found {len(questions)} questions")
                 # Format for structured response
                 return {
                     "type": "questions",
                     "subject": subject,
                     "data": questions
                 }
+            else:
+                print(f"⚠️  Matched pattern but no questions: subject='{subject}'")
     
+    print(f"ℹ️  No interception: '{message}'")
     return None
 
 

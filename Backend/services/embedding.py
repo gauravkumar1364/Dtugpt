@@ -72,8 +72,8 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
         if idx < len(questions_db):
             doc = questions_db[idx]
             
-            # Subject filter
-            if subject and doc.get("subject", "").lower() != subject.lower():
+            # Subject filter (substring match, case-insensitive)
+            if subject and subject.lower() not in doc.get("subject", "").lower():
                 continue
             
             results.append(doc)
