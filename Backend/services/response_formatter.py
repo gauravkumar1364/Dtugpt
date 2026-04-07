@@ -23,6 +23,7 @@ def clean_markdown(text: str) -> str:
 def parse_llm_response(response_text: str) -> dict:
     """
     Parse raw LLM response and structure it into organized sections
+    Optimized for structured format: ## Concept, ## Key Points, ## Exam Focus
     
     Returns a dictionary with:
     - title: Main heading (if present)
@@ -64,17 +65,17 @@ def parse_llm_response(response_text: str) -> dict:
             else:
                 current_section = {
                     "header": header_text,
-                    "level": level,
+                    "level": 2,  # Normalize all sections to level 2
                     "content": [],
                     "bullets": []
                 }
             i += 1
             continue
         
-        # Detect bullet points
-        bullet_match = re.match(r'^[-*•]\s+(.+)$', line)
+        # Detect bullet points (-, *, •, or numbers like 1., 2.)
+        bullet_match = re.match(r'^([-*•]|\d+\.)\s+(.+)$', line)
         if bullet_match:
-            bullet_text = clean_markdown(bullet_match.group(1).strip())
+            bullet_text = clean_markdown(bullet_match.group(2).strip())
             if current_section is not None:
                 current_section["bullets"].append(bullet_text)
             else:
@@ -111,38 +112,63 @@ def parse_llm_response(response_text: str) -> dict:
 
 
 def format_structured_response(structured_data: dict) -> str:
-    """Convert structured response back to clean markdown format"""
+    """Convert structured response back to clean, revision-friendly markdown format"""
     
     output = []
     
-    # Add title
+    # Add title with visual separator
     if structured_data.get("title"):
-        output.append(f"# {structured_data['title']}\n")
+        output.append(f"# {structured_data['title']}")
+        output.append("---")
     
-    # Add summary
+    # Add summary with visual prominence
     if structured_data.get("summary"):
-        output.append(f"{structured_data['summary']}\n")
+        output.append(f"\n{structured_data['summary']}\n")
     
-    # Add sections
-    for section in structured_data.get("sections", []):
-        header_level = section.get("level", 2)
+    # Add sections with improved formatting
+    sections = structured_data.get("sections", [])
+    
+    for idx, section in enumerate(sections):
+        # Add section header with number for better organization
         header_text = section.get("header", "")
-        output.append(f"{'#' * header_level} {header_text}")
         
+        # Use consistent ## for main sections (remove level complexity)
+        output.append(f"\n## {header_text}")
+        output.append("-" * (len(header_text) + 3))  # Visual underline
+        
+        # Add section content if present
         if section.get("content"):
-            output.append(section["content"])
+            content = section["content"].strip()
+            if content:
+                output.append(f"\n{content}\n")
         
-        if section.get("bullets"):
-            for bullet in section["bullets"]:
-                output.append(f"- {bullet}")
-        
-        output.append("")  # Empty line between sections
+        # Add bullets with better spacing
+        bullets = section.get("bullets", [])
+        if bullets:
+            for bullet in bullets:
+                output.append(f"• {bullet}")
+                
+        # Add spacing between major sections (except last)
+        if idx < len(sections) - 1:
+            output.append("")
     
-    # Add key points if no sections found
-    if not structured_data.get("sections") and structured_data.get("key_points"):
-        output.append("## Key Points\n")
-        for point in structured_data["key_points"]:
-            output.append(f"- {point}")
+    # Add key points as a summary section if present
+    key_points = structured_data.get("key_points", [])
+    if key_points and not sections:
+        output.append("\n## Key Points")
+        output.append("-" * 13)
+        for point in key_points:
+            output.append(f"• {point}")
+    elif key_points and sections:
+        # Add as recap section if sections exist
+        output.append("\n## Quick Recap")
+        output.append("-" * 14)
+        for point in key_points:
+            output.append(f"• {point}")
+    
+    # Add revision reminder at bottom
+    output.append("\n---")
+    output.append("✓ Ready for revision")
     
     return "\n".join(output)
 
