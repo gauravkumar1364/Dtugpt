@@ -56,6 +56,62 @@ app.add_middleware(
 )
 
 
+# ==================== BULK INGESTION FUNCTION ====================
+
+def process_pdf(file_path: str, subject: str, year: str = None) -> dict:
+    """
+    Process a single PDF file and store questions in database
+    
+    Args:
+        file_path: Path to the PDF file
+        subject: Subject/course code (e.g., "CO305", "itc", "dbms")
+        year: Year/semester (e.g., "2018", "2020", optional)
+    
+    Returns:
+        dict with processing results
+    """
+    try:
+        # Read PDF file
+        with open(file_path, 'rb') as f:
+            file_bytes = f.read()
+        
+        # Extract text from PDF
+        text = extract_text_from_pdf(file_bytes)
+        
+        # Extract questions using LLM
+        questions = clean_and_extract_questions_with_llm(text)
+        
+        if not questions:
+            return {
+                "status": "success",
+                "file": file_path,
+                "subject": subject,
+                "year": year,
+                "questions_extracted": 0,
+                "skip_reason": "No questions extracted"
+            }
+        
+        # Store questions in database and FAISS
+        store_questions(subject, questions)
+        
+        return {
+            "status": "success",
+            "file": file_path,
+            "subject": subject,
+            "year": year,
+            "questions_extracted": len(questions)
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "file": file_path,
+            "subject": subject,
+            "year": year,
+            "error": str(e)
+        }
+
+
 # ==================== MODE DETECTION ====================
 
 def detect_query_mode(message: str) -> str:
