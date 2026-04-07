@@ -20,8 +20,12 @@ from services.response_formatter import structure_llm_output
 # Load environment variables
 load_dotenv()
 
-# Initialize LLM
-llm_model = ChatGroq(model="qwen/qwen3-32b")
+# Initialize LLM with token limits to prevent truncation
+llm_model = ChatGroq(
+    model="qwen/qwen3-32b",
+    max_tokens=1024,  # Limit output to 1024 tokens (~4000 chars)
+    temperature=0.7
+)
 
 
 # ==================== LIFESPAN EVENTS ====================
@@ -182,13 +186,13 @@ Unique Topics: {unique}
 Topics by Frequency:
 {topic_summary}
 
-Task: Format as:
-1. Important Topics (top 5 by frequency)
-2. Study Focus Areas (ordered by frequency)
-3. Frequency Analysis (show which topics appear most)
+Task: Create a SHORT, focused response with:
+1. Most Important Topics (top 3-5 by frequency only)
+2. Study Priority (high/medium/low)
+3. Brief frequency breakdown
 
-Be concise. Focus on helping student prioritize study topics.
-Do NOT repeat raw question text. Keep it clean and organized."""
+Keep it UNDER 5 bullet points. Focus on quick reference.
+Do NOT repeat raw questions. Keep response SHORT."""
     
     print(f"\n📊 Sending CLEAN GROUPED DATA to LLM (not raw questions)")
     print(f"Topics: {len(topics_list)}, Total Questions: {total}")
@@ -229,7 +233,7 @@ async def chat(req: ChatRequest):
     
     detailed_prompt = f"""You are DTUGPT, an expert academic assistant for exam preparation.
 
-Your task: Answer the student's question in detail using exam-preparation style.
+Your task: Answer the student's question concisely and clearly.
 
 Context (Similar questions from past papers):
 {context if context else "No specific context available"}
@@ -238,17 +242,16 @@ Student's Question:
 {req.message}
 
 Requirements:
-1. Structure your answer clearly with numbered or bullet points
-2. Include key concepts, formulas, and explanations
-3. Provide study focus areas if applicable
-4. Format as:
-   - Main concept explanation (2-3 lines)
-   - Key points/formulas
-   - Important notes for exam
-5. Be detailed but organized
-6. Focus on exam preparation
+1. Keep answer concise (max 5-6 bullet points)
+2. Format:
+   - Main Concept (1-2 lines)
+   - Key Points (3-5 bullets)
+   - Important for Exam (1-2 key takeaways)
+3. Use bullet points, not paragraphs
+4. Include formulas only if essential
+5. Focus on exam relevance
 
-Provide a comprehensive, well-structured answer."""
+Keep it SHORT and ORGANIZED, not lengthy."""
     
     # Call LLM with detailed prompt
     response = llm_model.invoke(detailed_prompt)

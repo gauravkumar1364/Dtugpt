@@ -5,8 +5,12 @@ from .response_formatter import structure_llm_output
 
 load_dotenv()
 
-# Initialize LLM
-llm_model = ChatGroq(model="qwen/qwen3-32b")
+# Initialize LLM with token limits
+llm_model = ChatGroq(
+    model="qwen/qwen3-32b",
+    max_tokens=1024,  # Limit output to prevent truncation
+    temperature=0.7
+)
 
 
 async def answer_query(query: str, context_questions: list[dict]) -> dict:
@@ -33,7 +37,7 @@ These questions help establish the topic coverage and expected answer depth."""
     
     prompt = f"""You are a DTU exam assistant helping students prepare for exams.
 
-Your task: Answer the student's question comprehensively and clearly.
+Your task: Answer the student's question clearly and concisely.
 
 {f'Subject: {context_questions[0]["subject"]}' if context_questions and "subject" in context_questions[0] else ''}
 
@@ -43,14 +47,16 @@ Student's Question:
 {query}
 
 Instructions:
-1. Answer based on the question topic and similar previous year questions
-2. Use the previous questions as reference for scope and depth
-3. Structure your answer with clear sections and bullet points
-4. Include relevant facts, concepts, and explanations
-5. Keep it exam-oriented and concise
-6. Match the technical depth shown in previous questions
+1. Keep answer SHORT (5-7 bullet points max)
+2. Structure as:
+   - Definition/Concept (1-2 lines)
+   - Key Points (3-4 bullets)
+   - Exam Tip (1 key takeaway)
+3. Use bullet format, not paragraphs
+4. Include formulas only if essential
+5. Match scope of previous year questions
 
-Answer:"""
+Answer (SHORT and FORMATTED):"""  
     
     response = llm_model.invoke(prompt)
     raw_answer = response.content
