@@ -99,13 +99,13 @@ def intercept_query(message: str) -> Optional[dict]:
 
 def format_mongodb_response(intercept_data: dict) -> dict:
     """
-    Format analyzed MongoDB results and send to LLM for insights
+    Format analyzed data into clean structured response
+    PYTHON does the analysis, LLM only formats output
     """
     subject = intercept_data.get("subject", "Unknown")
     analyzed = intercept_data.get("data", {})
     
     topics = analyzed.get("topics", [])
-    frequency = analyzed.get("frequency_analysis", {})
     total = analyzed.get("total_questions", 0)
     unique = analyzed.get("unique_topics", 0)
     
@@ -118,38 +118,40 @@ def format_mongodb_response(intercept_data: dict) -> dict:
             "formatted_markdown": ""
         }
     
-    # Build a detailed prompt for LLM with analyzed data
-    analysis_text = f"""
-Subject: {subject.upper()}
+    # Build clean, grouped data - NO raw questions
+    topics_list = []
+    for topic in topics[:10]:  # Top 10 topics
+        topics_list.append({
+            "name": topic["topic"],
+            "frequency": topic["frequency"]
+        })
+    
+    # Build the prompt with CLEAN, GROUPED data only
+    # NOT raw questions, just topic names and frequencies
+    topic_summary = "\n".join([
+        f"- {t['name']} (frequency: {t['frequency']})" 
+        for t in topics_list
+    ])
+    
+    prompt = f"""Format this exam analysis data for a student:
+
+Subject: {subject}
 Total Questions: {total}
 Unique Topics: {unique}
 
 Topics by Frequency:
-"""
+{topic_summary}
+
+Task: Format as:
+1. Important Topics (top 5 by frequency)
+2. Study Focus Areas (ordered by frequency)
+3. Frequency Analysis (show which topics appear most)
+
+Be concise. Focus on helping student prioritize study topics.
+Do NOT repeat raw question text. Keep it clean and organized."""
     
-    for topic in topics[:10]:
-        analysis_text += f"\n- {topic['topic']} (asked {topic['frequency']} times)\n"
-        for sample in topic.get('sample_questions', [])[:1]:
-            analysis_text += f"  Sample: {sample[:80]}...\n"
-    
-    # Call LLM to generate insights
-    prompt = f"""Based on the analysis of past year questions for {subject}, provide insights:
-
-{analysis_text}
-
-Task:
-1. Identify the most important topics
-2. List the most frequently asked questions
-3. Provide a frequency summary
-
-Format your response with:
-- Important Topics (top 3-5)
-- Most Asked Questions (top 3-5)  
-- Frequency Insight
-
-Keep it concise and focused on exam preparation."""
-    
-    print(f"\n🤖 Sending to LLM for analysis:\n{prompt}\n")
+    print(f"\n📊 Sending CLEAN GROUPED DATA to LLM (not raw questions)")
+    print(f"Topics: {len(topics_list)}, Total Questions: {total}")
     
     response = llm_model.invoke(prompt)
     raw_response = response.content

@@ -9,20 +9,34 @@ import re
 def normalize_question(question: str) -> str:
     """
     Normalize question text for grouping
-    Removes Q1(a) prefixes and cleans up formatting
+    Removes Q1(a) prefixes, question words, and cleans up formatting
     """
+    q = question.strip()
+    
     # Remove Q1(a), Q2(b) etc patterns
-    q = re.sub(r'^q\d+\([a-z]\)\s*', '', question, flags=re.IGNORECASE)
+    q = re.sub(r'^q\d+\s*\([a-z]\)\s*', '', q, flags=re.IGNORECASE)
     q = re.sub(r'\bq\d+\s*\([a-z]\)', '', q, flags=re.IGNORECASE)
     
     # Convert to lowercase
     q = q.lower()
+    
+    # Remove common question starter words
+    q = re.sub(r'^(what|when|where|who|why|how|define|explain|show|prove|determine|find|derive|assume|suppose|calculate|compute|discuss|analyze)\s+', '', q, flags=re.IGNORECASE)
+    q = re.sub(r'^(is|are)\s+', '', q)
+    q = re.sub(r'^an?\s+', '', q)
+    q = re.sub(r'^the\s+', '', q)
     
     # Remove special characters but keep spaces
     q = re.sub(r'[^a-z0-9\s]', '', q)
     
     # Remove extra whitespace
     q = ' '.join(q.split())
+    
+    # If empty after cleaning, return original normalized
+    if not q:
+        return question.lower().strip()[:50]
+    
+    return q.strip()
     
     return q.strip()
 
