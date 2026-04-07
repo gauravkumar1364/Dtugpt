@@ -14,7 +14,7 @@ from models import ChatRequest, AskRequest
 from services.pdf_service import extract_text_from_pdf, clean_and_extract_questions_with_llm
 from services.embedding import store_questions, search_similar, load_questions_from_db
 from services.query_service import answer_query
-from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count, get_most_asked_topics
+from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count, get_most_asked_topics, get_analyzed_questions
 from services.response_formatter import structure_llm_output
 
 # Load environment variables
@@ -78,16 +78,17 @@ def intercept_query(message: str) -> Optional[dict]:
             
             print(f"🔍 Interceptor: Testing subject='{subject}'")
             
-            # Query MongoDB for questions with this subject
-            questions = get_most_asked_questions(subject=subject, limit=10)
+            # Get ANALYZED questions with clustering and frequency
+            analyzed_data = get_analyzed_questions(subject=subject, limit=10)
+            questions = analyzed_data.get("topics", [])
             
             if questions:
-                print(f"✅ INTERCEPTED: Query='{message}' -> Subject='{subject}' -> Found {len(questions)} questions")
-                # Format for structured response
+                print(f"✅ INTERCEPTED: Query='{message}' -> Subject='{subject}' -> Found {len(questions)} topics")
+                # Format for LLM analysis
                 return {
-                    "type": "questions",
+                    "type": "analyzed_questions",
                     "subject": subject,
-                    "data": questions
+                    "data": analyzed_data
                 }
             else:
                 print(f"⚠️  Matched pattern but no questions: subject='{subject}'")
@@ -98,12 +99,17 @@ def intercept_query(message: str) -> Optional[dict]:
 
 def format_mongodb_response(intercept_data: dict) -> dict:
     """
-    Format MongoDB results into structured response format
+    Format analyzed MongoDB results and send to LLM for insights
     """
     subject = intercept_data.get("subject", "Unknown")
-    questions = intercept_data.get("data", [])
+    analyzed = intercept_data.get("data", {})
     
-    if not questions:
+    topics = analyzed.get("topics", [])
+    frequency = analyzed.get("frequency_analysis", {})
+    total = analyzed.get("total_questions", 0)
+    unique = analyzed.get("unique_topics", 0)
+    
+    if not topics:
         return {
             "title": "",
             "summary": f"No questions found for subject: {subject}",
@@ -112,35 +118,46 @@ def format_mongodb_response(intercept_data: dict) -> dict:
             "formatted_markdown": ""
         }
     
-    # Build sections with questions grouped
-    sections = []
+    # Build a detailed prompt for LLM with analyzed data
+    analysis_text = f"""
+Subject: {subject.upper()}
+Total Questions: {total}
+Unique Topics: {unique}
+
+Topics by Frequency:
+"""
     
-    # Add overview section
-    overview_bullets = [f"{q['question'][:100]}..." for q in questions[:5]]
-    sections.append({
-        "header": f"Top Questions for {subject.upper()}",
-        "level": 2,
-        "content": f"Found {len(questions)} question(s) for {subject}",
-        "bullets": overview_bullets
-    })
+    for topic in topics[:10]:
+        analysis_text += f"\n- {topic['topic']} (asked {topic['frequency']} times)\n"
+        for sample in topic.get('sample_questions', [])[:1]:
+            analysis_text += f"  Sample: {sample[:80]}...\n"
     
-    # Add all questions if more than 5
-    if len(questions) > 5:
-        more_bullets = [f"{q['question'][:100]}..." for q in questions[5:]]
-        sections.append({
-            "header": "Additional Questions",
-            "level": 2,
-            "content": "",
-            "bullets": more_bullets
-        })
+    # Call LLM to generate insights
+    prompt = f"""Based on the analysis of past year questions for {subject}, provide insights:
+
+{analysis_text}
+
+Task:
+1. Identify the most important topics
+2. List the most frequently asked questions
+3. Provide a frequency summary
+
+Format your response with:
+- Important Topics (top 3-5)
+- Most Asked Questions (top 3-5)  
+- Frequency Insight
+
+Keep it concise and focused on exam preparation."""
     
-    return {
-        "title": "",
-        "summary": f"Questions for {subject}",
-        "sections": sections,
-        "key_points": [q["question"] for q in questions[:3]],
-        "formatted_markdown": "\n".join([f"- {q['question']}" for q in questions])
-    }
+    print(f"\n🤖 Sending to LLM for analysis:\n{prompt}\n")
+    
+    response = llm_model.invoke(prompt)
+    raw_response = response.content
+    
+    # Structure the LLM response
+    structured = structure_llm_output(raw_response, return_format="json")
+    
+    return structured
 
 
 @app.post("/chat")
