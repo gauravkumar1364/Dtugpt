@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 import FileUpload from "./file_upload";
 import MessageDisplay from "./MessageDisplay";
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 
 function App() {
   // 1. State must live INSIDE the functional component
@@ -12,6 +13,38 @@ function App() {
   const [isLoading,setisLoading] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+
+  // 📝 Load chat history from localStorage on component mount
+  useEffect(() => {
+    const savedMessages = localStorage.getItem("chatHistory");
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        setmessages(parsedMessages);
+        console.log("✅ Loaded chat history from localStorage");
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    }
+  }, []);
+
+  // 💾 Save chat history to localStorage whenever messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("chatHistory", JSON.stringify(messages));
+      console.log("💾 Chat history saved to localStorage");
+    }
+  }, [messages]);
+
+  // 🗑️ Clear chat history
+  const clearChatHistory = () => {
+    if (window.confirm("Are you sure you want to clear all chat history? This cannot be undone.")) {
+      setmessages([]);
+      localStorage.removeItem("chatHistory");
+      setExpandedThinking(null);
+      console.log("🗑️  Chat history cleared");
+    }
+  };
 
   const sendMessage = async () => {
     if(!input.trim()) return; // Prevent sending empty messages
@@ -96,9 +129,14 @@ function App() {
 
           {/* Navigation Links */}
           <nav className="flex-1 flex flex-col gap-2 p-3 mt-4 overflow-y-auto overflow-x-hidden">
-            <a
-              href="#"
-              className="flex items-center gap-4 p-2 rounded-full hover:bg-[#1a1a1a] transition-colors min-w-0"
+            {/* New Chat Button */}
+            <button
+              onClick={() => {
+                setmessages([]);
+                setExpandedThinking(null);
+              }}
+              className="flex items-center gap-4 p-2 rounded-lg hover:bg-[#1a1a1a] transition-colors min-w-0 text-left w-full bg-[#1f6feb] text-white font-medium"
+              title="Start a new chat"
             >
               <div className="min-w-[24px]">
                 <svg
@@ -111,24 +149,26 @@ function App() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                    d="M12 4v16m8-8H4"
                   />
                 </svg>
               </div>
               <span
                 className={`whitespace-nowrap transition-opacity duration-300 ${isExpanded ? "opacity-100" : "opacity-0"}`}
               >
-                Dashboard
+                New Chat
               </span>
-            </a>
+            </button>
 
-            <a
-              href="#"
-              className="flex items-center gap-4 p-2 rounded-full hover:bg-[#1a1a1a] transition-colors min-w-0"
+            {/* Clear Chat Button */}
+            <button
+              onClick={clearChatHistory}
+              className="flex items-center gap-4 p-2 rounded-full hover:bg-[#1a1a1a] transition-colors min-w-0 text-left w-full mt-auto"
+              title="Clear all chat history"
             >
               <div className="min-w-[24px]">
                 <svg
-                  className="w-5 h-5"
+                  className="w-5 h-5 text-[#ff6b6b]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -137,22 +177,16 @@ function App() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                   />
                 </svg>
               </div>
               <span
-                className={`whitespace-nowrap transition-opacity duration-300 ${isExpanded ? "opacity-100" : "opacity-0"}`}
+                className={`whitespace-nowrap transition-opacity duration-300 text-[#ff6b6b] ${isExpanded ? "opacity-100" : "opacity-0"}`}
               >
-                Settings
+                Clear Chat
               </span>
-            </a>
+            </button>
           </nav>
         </div>
 
@@ -160,22 +194,51 @@ function App() {
         <div className="flex-1 p-5 text-[#d6d6d6] bg-[#111111] text-xl flex flex-col min-w-0">
           <nav className="border-b border-[#252525] mb-5 p-5 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
             <ul className="flex justify-between items-center">
-              <li className="font-semibold tracking-wide text-sm text-[#bfbfbf]">PROJECT</li>
-              <li>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-6 h-6 text-[#8a8a8a]"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+              <li className="font-semibold tracking-wide text-sm text-[#bfbfbf]">DTU GPT</li>
+              <li className="flex items-center gap-3">
+                {/* Clerk Auth UI */}
+                <Show when="signed-out">
+                  <div className="flex gap-3">
+                    <SignInButton 
+                      mode="modal"
+                      forceRedirectUrl="/"
+                      fallbackRedirectUrl="/"
+                      appearance={{
+                        baseTheme: undefined,
+                        elements: {
+                          button: "px-4 py-2 rounded-lg font-medium text-sm bg-[#1f6feb] text-white hover:bg-[#1a5fd9] transition-colors border-0",
+                          buttonBase: "transition-colors"
+                        }
+                      }}
+                    />
+                    <SignUpButton 
+                      mode="modal"
+                      forceRedirectUrl="/"
+                      fallbackRedirectUrl="/"
+                      appearance={{
+                        baseTheme: undefined,
+                        elements: {
+                          button: "px-4 py-2 rounded-lg font-medium text-sm bg-[#2d2d2d] text-white hover:bg-[#3a3a3a] border border-[#404040] transition-colors",
+                          buttonBase: "transition-colors"
+                        }
+                      }}
+                    />
+                  </div>
+                </Show>
+                <Show when="signed-in">
+                  <UserButton 
+                    afterSignOutUrl="/"
+                    userProfileMode="navigation"
+                    userProfileUrl="/user-profile"
+                    appearance={{
+                      elements: {
+                        avatarBox: "w-10 h-10 rounded-lg",
+                        userButtonPopoverCard: "bg-[#1a1a1a] border border-[#404040]",
+                        userButtonPopoverActionButtonText: "text-[#e5e5e5]",
+                      }
+                    }}
                   />
-                </svg>
+                </Show>
               </li>
             </ul>
           </nav>

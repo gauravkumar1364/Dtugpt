@@ -537,3 +537,67 @@ async def search_result(name: Optional[str] = None, roll: str = None, batch: str
         return result
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/result/debug/{roll}/{batch}")
+async def debug_result(roll: str, batch: str):
+    """
+    DEBUG ENDPOINT: Get raw HTML and parsed structure
+    Use this to inspect what the website actually returns
+    
+    Args:
+        roll: Student roll number
+        batch: Batch year
+    
+    Returns:
+        Raw HTML snippet and debug info
+    """
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        url = f"https://www.resulthubdtu.com/DTU/StudentProfile/{batch}/{roll}"
+        print(f"\n📍 DEBUG: Fetching {url}")
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # Get HTML statistics
+        tables = soup.find_all("table")
+        divs = soup.find_all("div", class_=lambda x: x and ("table" in (x or "").lower()))
+        paragraphs = soup.find_all("p")
+        
+        # Extract sample of each section
+        debug_info = {
+            "url": url,
+            "status_code": response.status_code,
+            "html_length": len(response.text),
+            "tables_found": len(tables),
+            "div_containers_found": len(divs),
+            "paragraphs_found": len(paragraphs),
+            
+            # Sample HTML
+            "first_table_html": str(tables[0])[:500] if tables else None,
+            "first_250_chars": response.text[:250],
+            "paragraphs_sample": [p.get_text(strip=True)[:100] for p in paragraphs[:10]],
+            
+            # Try to find grades pattern
+            "text_containing_grade": [line for line in response.text.split('\n') if 'grade' in line.lower()][:5],
+            "text_containing_subject": [line for line in response.text.split('\n') if 'subject' in line.lower()][:5],
+        }
+        
+        return debug_info
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "roll": roll,
+            "batch": batch,
+            "message": "Failed to fetch debug info"
+        }
