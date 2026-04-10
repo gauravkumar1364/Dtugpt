@@ -16,6 +16,7 @@ from services.embedding import store_questions, search_similar, load_questions_f
 from services.query_service import answer_query
 from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count, get_most_asked_topics, get_analyzed_questions
 from services.response_formatter import structure_llm_output, clean_markdown
+from services.result_service import fetch_result, get_result_by_details
 
 # Load environment variables
 load_dotenv()
@@ -33,9 +34,9 @@ llm_model = ChatGroq(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events using lifespan context manager"""
-    # Startup
+    # Startup - load both questions and Q+A pairs
     load_questions_from_db()
-    print("✅ DTU PYQ Assistant started")
+    print("✅ DTU PYQ Assistant started - Questions and Q+A pairs loaded")
     
     yield
     
@@ -199,8 +200,8 @@ def intercept_query(message: str) -> Optional[dict]:
 
 def format_mongodb_response(intercept_data: dict) -> dict:
     """
-    Format analyzed data into clean structured response
-    PYTHON does the analysis, LLM only formats output
+    Generate EXPECTED EXAM QUESTIONS based on past year patterns
+    Exam prediction engine - not notes generator
     """
     subject = intercept_data.get("subject", "Unknown")
     analyzed = intercept_data.get("data", {})
@@ -218,51 +219,65 @@ def format_mongodb_response(intercept_data: dict) -> dict:
             "formatted_markdown": ""
         }
     
-    # Build clean, grouped data - NO raw questions
-    topics_list = []
-    for topic in topics[:10]:  # Top 10 topics
-        topics_list.append({
-            "name": topic["topic"],
-            "frequency": topic["frequency"]
-        })
+    # Collect ACTUAL questions from topics
+    all_questions_list = []
+    for topic in topics[:15]:  # Get up to 15 topics
+        for sample_q in topic.get("sample_questions", []):
+            if sample_q not in all_questions_list:
+                all_questions_list.append(sample_q)
     
-    # Build the prompt with CLEAN, GROUPED data only
-    # NOT raw questions, just topic names and frequencies
-    topic_summary = "\n".join([
-        f"- {t['name']} (frequency: {t['frequency']})" 
-        for t in topics_list
+    # Format questions as numbered list
+    formatted_questions = "\n".join([
+        f"{i}. {q}" 
+        for i, q in enumerate(all_questions_list[:20], 1)  # Top 20 questions
     ])
     
-    prompt = f"""You are DTUGPT.
+    # Build prompt - EXAM PREDICTION ENGINE focused on generating questions
+    prompt = f"""You are an exam assistant.
 
-Format frequency analysis for: {subject}
+Here are past year questions for {subject}:
 
-Topics by Frequency:
-{topic_summary}
+{formatted_questions}
 
-Generate Output:
-
-## Important Topics
-- [Topic name] - Frequency: High/Medium/Low
-- [Topic name] - Frequency: High/Medium/Low
-(Only top 3-5 topics)
-
-## Study Focus
-- Prioritize high frequency topics
-- Quick revision checklist for exam
-
-## Statistics
-- Total Questions: {total}
-- Unique Topics: {unique}
+Task:
+Generate expected exam questions based on repeated patterns.
 
 Rules:
-- Clean format, no extra text
-- Only list non-zero frequency topics
-- Help student study efficiently
-- No raw question text"""
+- Focus on most repeated patterns
+- Do NOT explain concepts
+- ONLY output questions
+- Group into 3 categories:
+
+1. Most Expected (High frequency patterns - most likely to appear)
+2. Moderate (Medium frequency patterns)
+3. Concept-based (Varied patterns testing concepts)
+
+Output clean and concise.
+
+Format:
+
+## Most Expected Questions
+- Question 1
+- Question 2
+- Question 3
+
+## Moderate Questions
+- Question 1
+- Question 2
+
+## Concept-based Questions
+- Question 1
+- Question 2
+
+Rules:
+- ONLY output questions from patterns in given questions
+- NO explanations
+- NO definitions
+- Concise format
+- Under 150 words total"""
     
-    print(f"\n📊 Sending CLEAN GROUPED DATA to LLM (not raw questions)")
-    print(f"Topics: {len(topics_list)}, Total Questions: {total}")
+    print(f"\n🔥 EXAM PREDICTION ENGINE for {subject}")
+    print(f"Analyzing {len(all_questions_list)} questions to predict exam patterns")
     
     response = llm_model.invoke(prompt)
     raw_response = response.content
@@ -284,7 +299,7 @@ async def chat(req: ChatRequest):
     # Detect query mode
     mode = detect_query_mode(req.message)
     
-    # ANALYSIS MODE: Return frequency analysis
+    # ANALYSIS MODE: Return frequency analysis with ACTUAL questions
     if mode == "analysis":
         intercept_result = intercept_query(req.message)
         if intercept_result:
@@ -294,38 +309,61 @@ async def chat(req: ChatRequest):
                 "thinking": None
             }
     
-    # DETAILED MODE: Answer with exam-style details
-    # Get context from similar questions
-    context = get_context_for_detailed(req.message)
+    # DETAILED MODE: Send ACTUAL similar questions to LLM with strict instructions
+    search_results = search_similar(req.message, top_k=10)
     
-    detailed_prompt = f"""You are DTUGPT.
+    # Format ACTUAL questions for LLM
+    questions_text = ""
+    if search_results:
+        formatted_questions = []
+        for i, q in enumerate(search_results, 1):
+            formatted_questions.append(f"{i}. {q.get('question', '')}")
+        questions_text = "\n".join(formatted_questions)
+    
+    # Build prompt - QUESTION GENERATION focused
+    detailed_prompt = f"""You are an exam assistant.
 
-Generate structured study notes for this question: {req.message}
+Topic: {req.message}
 
-{f'Related PYQ Topics: {context}' if context else ''}
+Here are related past year questions:
 
-Format Output Exactly:
+{questions_text}
 
-## Concept
-- Clear definition or main idea (2-3 lines max)
-
-## Key Points
-- Point 1
-- Point 2
-- Point 3
-(Only essential points, no redundancy)
-
-## Exam Focus
-- What to remember for exams
-- Common question patterns
-- Important formula (if any)
+Task:
+Generate expected exam questions based on patterns.
 
 Rules:
-- Be concise and direct
-- No repetition between sections
-- Use bullet format only
-- No lengthy explanations
-- Keep total length under 150 words"""
+- Focus on most repeated patterns
+- Do NOT explain concepts
+- ONLY output questions
+- Group into:
+   1. Most Expected
+   2. Moderate
+   3. Concept-based
+
+Output clean and concise.
+
+Format:
+
+## Most Expected Questions
+- Question 1
+- Question 2
+
+## Moderate Questions
+- Question 1
+- Question 2
+
+## Concept-based Questions
+- Question 1
+- Question 2
+
+Rules:
+- ONLY output questions from past patterns
+- NO explanations
+- NO key points
+- NO formulas
+- Concise format
+- Under 100 words total"""  
     
     # Call LLM with detailed prompt
     response = llm_model.invoke(detailed_prompt)
@@ -458,3 +496,44 @@ async def health():
         "status": "healthy",
         "total_questions": get_question_count()
     }
+
+
+# ==================== RESULT SERVICE - DTU RESULTHUB ====================
+
+@app.get("/result/{roll}/{batch}")
+async def get_result_endpoint(roll: str, batch: str):
+    """
+    Fetch student result from DTU ResultHub
+    
+    Args:
+        roll: Student roll number (e.g., "2K19/EC/107")
+        batch: Batch year (e.g., "2019")
+    
+    Returns:
+        Student result with CGPA, SGPA, subjects, grades
+    """
+    try:
+        result = fetch_result(roll, batch)
+        return result
+    except Exception as e:
+        return {"error": str(e), "roll": roll, "batch": batch}
+
+
+@app.get("/result/search")
+async def search_result(name: Optional[str] = None, roll: str = None, batch: str = None):
+    """
+    Search student result by name and/or roll number
+    
+    Args:
+        name: Student name (optional)
+        roll: Student roll number
+        batch: Batch year
+    
+    Returns:
+        Student result
+    """
+    try:
+        result = get_result_by_details(name=name, roll=roll, batch=batch)
+        return result
+    except Exception as e:
+        return {"error": str(e)}

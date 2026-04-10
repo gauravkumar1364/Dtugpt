@@ -15,55 +15,62 @@ llm_model = ChatGroq(
 
 async def answer_query(query: str, context_questions: list[dict]) -> dict:
     """
-    Generate answer based on similar questions and user query
-    Uses subject context if available
-    Returns structured and readable response
+    Generate EXPECTED EXAM QUESTIONS based on patterns
+    Exam prediction engine - generates questions, not explanations
     """
-    # Build context from matched questions with better formatting
-    if context_questions:
-        questions_list = "\n".join([f"- {q['question']}" for q in context_questions])
-        context = f"""
-Previous Year Questions on Similar Topics:
-{questions_list}
-
-These questions help establish the topic coverage and expected answer depth."""
-    else:
-        context = ""
-    
-    # Extract subject from first question if available
-    subject_context = ""
+    subject = ""
     if context_questions and "subject" in context_questions[0]:
-        subject_context = f" ({context_questions[0]['subject']})"
+        subject = context_questions[0]["subject"]
     
-    prompt = f"""You are DTUGPT.
+    # Format ACTUAL questions - not summaries!
+    questions_text = ""
+    if context_questions:
+        formatted_questions = []
+        for i, q in enumerate(context_questions, 1):
+            formatted_questions.append(f"{i}. {q['question']}")
+        questions_text = "\n".join(formatted_questions)
+    
+    prompt = f"""You are an exam assistant.
 
-Answer: {query}
+Here are past year questions for {subject}:
 
-{f'Subject: {context_questions[0]["subject"]}' if context_questions and "subject" in context_questions[0] else ''}
-{context if context else ''}
+{questions_text}
 
-Format Output:
-
-## Concept
-- Main definition or idea (2-3 lines only)
-
-## Key Points
-- Essential point 1
-- Essential point 2
-- Essential point 3
-(Only crucial concepts, no repetition)
-
-## Exam Focus
-- Important for exam
-- Common question format
-- Key formula or formula (if needed)
+Task:
+Generate expected exam questions.
 
 Rules:
-- Direct and concise
-- No verbose explanations
-- Bullet points only
-- Match exam scope
-- Under 150 words total"""  
+- Focus on most repeated patterns
+- Do NOT explain concepts
+- ONLY output questions
+- Group into:
+   1. Most Expected
+   2. Moderate
+   3. Concept-based
+
+Output clean and concise.
+
+Format:
+
+## Most Expected Questions
+- Question 1
+- Question 2
+- Question 3
+
+## Moderate Questions
+- Question 1
+- Question 2
+
+## Concept-based Questions
+- Question 1
+- Question 2
+
+Rules:
+- ONLY output questions from patterns in given questions
+- NO explanations
+- NO definitions
+- Concise format
+- Under 100 words total"""
     
     response = llm_model.invoke(prompt)
     raw_answer = response.content

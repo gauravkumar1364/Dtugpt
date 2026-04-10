@@ -9,7 +9,7 @@ from pathlib import Path
 from main import process_pdf, load_questions_from_db
 
 # Configuration
-BASE_FOLDER = "download"  # folder from gdown
+BASE_FOLDER = "DTU PYQs COE (2024 Updated)"  # folder from gdown
 SUPPORTED_FORMATS = {".pdf", ".PDF"}
 
 # Statistics

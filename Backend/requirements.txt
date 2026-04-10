@@ -18,3 +18,7 @@ pdf2image
 sentence-transformers 
 faiss-cpu
 pymongo
+gdown 
+beautifulsoup4
+requests
+selenium

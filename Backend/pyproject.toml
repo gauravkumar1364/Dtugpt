@@ -5,8 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "beautifulsoup4>=4.14.3",
     "faiss-cpu>=1.13.2",
     "fastapi>=0.135.2",
+    "gdown>=5.2.1",
     "langchain>=1.2.13",
     "langchain-deepseek>=1.0.1",
     "langchain-google-genai>=4.2.1",
@@ -21,6 +23,8 @@ dependencies = [
     "pytesseract>=0.3.13",
     "python-dotenv>=1.2.2",
     "python-multipart>=0.0.22",
+    "requests>=2.33.0",
+    "selenium>=4.42.0",
     "sentence-transformers>=5.3.0",
     "uvicorn>=0.42.0",
 ]
