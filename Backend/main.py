@@ -148,24 +148,38 @@ def get_processed_count(folder_path: str = None) -> int:
 
 def detect_query_mode(message: str) -> str:
     """
-    Detect if query is analysis mode or detailed mode
+    Detect query type:
     
-    Analysis mode: "most asked", "important", "frequency", "topics"
-    Detailed mode: everything else (specific questions, explanations)
+    "analysis" mode: "most asked", "important", "frequency", "topics"
+    "questions" mode: "questions", "predict", "pyq", "past year", "what questions"
+    "explanation" mode: everything else (concepts, explanations, how-to)
     """
     msg_lower = message.lower()
     
+    # Analysis mode keywords
     analysis_keywords = [
         "most asked", "important", "frequency", "topics", 
         "trending", "repeated", "common", "usually", "often",
         "statistics", "summary", "overview"
     ]
     
+    # Questions mode keywords
+    question_keywords = [
+        "question", "predict", "pyq", "past year", "previous",
+        "expect", "probable", "likely", "coming", "exam question",
+        "will ask", "might ask"
+    ]
+    
     for keyword in analysis_keywords:
         if keyword in msg_lower:
             return "analysis"
     
-    return "detailed"
+    for keyword in question_keywords:
+        if keyword in msg_lower:
+            return "questions"
+    
+    # Default is explanation mode
+    return "explanation"
 
 
 def get_context_for_detailed(query: str) -> str:
@@ -379,10 +393,10 @@ Rules:
 @app.post("/chat")
 async def chat(req: ChatRequest):
     """
-    Chat endpoint with enhanced features:
-    1. Extracts student roll numbers and fetches their details
-    2. Analysis Mode - for "most asked questions" type queries
-    3. Detailed Mode - for specific questions and explanations
+    Chat endpoint with 3 modes:
+    1. Analysis Mode - frequency analysis for "most asked" queries
+    2. Questions Mode - predict likely exam questions
+    3. Explanation Mode - provide concept explanations and details
     """
     
     # FEATURE 1: Extract roll number and fetch student details
@@ -401,8 +415,9 @@ async def chat(req: ChatRequest):
     
     # Detect query mode
     mode = detect_query_mode(req.message)
+    print(f"📋 Query Mode: {mode}")
     
-    # ANALYSIS MODE: Return frequency analysis with ACTUAL questions
+    # ========== ANALYSIS MODE: Return frequency analysis ==========
     if mode == "analysis":
         intercept_result = intercept_query(req.message)
         if intercept_result:
@@ -413,19 +428,21 @@ async def chat(req: ChatRequest):
                 "student_data": student_details if student_context else None
             }
     
-    # DETAILED MODE: Send ACTUAL similar questions to LLM with strict instructions
+    # Get similar questions for context
     search_results = search_similar(req.message, top_k=10)
     
-    # Format ACTUAL questions for LLM
-    questions_text = ""
-    if search_results:
-        formatted_questions = []
-        for i, q in enumerate(search_results, 1):
-            formatted_questions.append(f"{i}. {q.get('question', '')}")
-        questions_text = "\n".join(formatted_questions)
-    
-    # Build prompt - Include student data if available
-    detailed_prompt = f"""You are an exam assistant and student advisor.
+    # ========== QUESTIONS MODE: Generate expected exam questions ==========
+    if mode == "questions":
+        # Format ACTUAL questions for LLM
+        questions_text = ""
+        if search_results:
+            formatted_questions = []
+            for i, q in enumerate(search_results, 1):
+                formatted_questions.append(f"{i}. {q.get('question', '')}")
+            questions_text = "\n".join(formatted_questions)
+        
+        # Build prompt for QUESTION PREDICTION
+        questions_prompt = f"""You are an exam assistant and student advisor.
 
 {student_context}
 
@@ -436,15 +453,15 @@ Here are related past year questions:
 {questions_text}
 
 Task:
-Generate expected exam questions based on patterns.
+Generate expected exam questions based on repeated patterns.
 
 Rules:
 - Focus on most repeated patterns
 - Do NOT explain concepts
 - ONLY output questions
 - Group into:
-   1. Most Expected
-   2. Moderate
+   1. Most Expected (High frequency)
+   2. Moderate (Medium frequency)
    3. Concept-based
 
 Output clean and concise.
@@ -464,16 +481,49 @@ Format:
 - Question 2
 
 Rules:
-- ONLY output questions from past patterns
-- NO explanations
-- NO key points
-- NO formulas
+- ONLY output questions
+- NO explanations or key points
 - Concise format
 - Under 100 words total"""  
+        
+        response = llm_model.invoke(questions_prompt)
+        raw_text = response.content
     
-    # Call LLM with detailed prompt
-    response = llm_model.invoke(detailed_prompt)
-    raw_text = response.content
+    # ========== EXPLANATION MODE: Provide concept explanation ==========
+    else:
+        # Format reference questions for context
+        context_questions = ""
+        if search_results:
+            formatted_questions = []
+            for i, q in enumerate(search_results[:5], 1):
+                formatted_questions.append(f"{i}. {q.get('question', '')}")
+            context_questions = "\n".join(formatted_questions)
+        
+        # Build prompt for EXPLANATION
+        explanation_prompt = f"""You are an exam assistant and student advisor.
+
+{student_context}
+
+Topic: {req.message}
+
+Related past year questions:
+{context_questions}
+
+Task:
+Provide a comprehensive but concise explanation of the topic. Include:
+1. Definition and key concepts
+2. Important points and formulas
+3. Common applications or examples
+4. Why it's important for exams
+
+Format:
+- Use bullet points for clarity
+- Bold important terms
+- Keep it under 300 words
+- Make it student-friendly"""
+        
+        response = llm_model.invoke(explanation_prompt)
+        raw_text = response.content
 
     # Extract and remove thinking if present
     thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
