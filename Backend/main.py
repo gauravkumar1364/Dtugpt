@@ -2,6 +2,7 @@ import os
 import re
 from contextlib import asynccontextmanager
 from typing import Optional
+from pathlib import Path
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -113,6 +114,36 @@ def process_pdf(file_path: str, subject: str, year: str = None) -> dict:
         }
 
 
+# ==================== FILE TRACKING FOR BULK INGESTION ====================
+
+def is_processed(file_path: str) -> bool:
+    """Check if a file has already been processed"""
+    from db import processed_files
+    return processed_files.find_one({"file_path": file_path}) is not None
+
+
+def mark_processed(file_path: str, subject: str, questions_count: int) -> None:
+    """Mark a file as processed with metadata"""
+    from db import processed_files
+    from datetime import datetime
+    
+    processed_files.insert_one({
+        "file_path": file_path,
+        "subject": subject,
+        "questions_extracted": questions_count,
+        "processed_at": datetime.now()
+    })
+
+
+def get_processed_count(folder_path: str = None) -> int:
+    """Get total number of processed files (optionally filtered by folder)"""
+    from db import processed_files
+    
+    if folder_path:
+        return processed_files.count_documents({"file_path": {"$regex": folder_path}})
+    return processed_files.count_documents({})
+
+
 # ==================== MODE DETECTION ====================
 
 def detect_query_mode(message: str) -> str:
@@ -151,6 +182,63 @@ def get_context_for_detailed(query: str) -> str:
         context += f"- {q['question']}\n"
     
     return context
+
+
+def extract_roll_number(message: str) -> Optional[dict]:
+    """
+    Extract roll number and batch from message
+    Patterns: "2K19/EC/107" or "23/SE/064" etc.
+    """
+    # Pattern for roll numbers like 2K19/EC/107 or 23/SE/064
+    roll_pattern = r"(\d{1,4}[KA-Z]?\d{2}\/[A-Z]+\/\d{3})"
+    match = re.search(roll_pattern, message)
+    
+    if match:
+        roll = match.group(1).strip()
+        # Extract batch year (first 2 or 4 digits)
+        batch_match = re.match(r"(\d{4}|\d{2})", roll)
+        batch = batch_match.group(1) if batch_match else "2027"
+        
+        print(f"🔍 Found roll number: {roll}, batch: {batch}")
+        return {"roll": roll, "batch": batch}
+    
+    return None
+
+
+def get_student_details(roll: str, batch: str) -> Optional[dict]:
+    """
+    Fetch student details from ResultHub
+    """
+    try:
+        result = fetch_result(roll, batch)
+        if "error" not in result and "cgpa" in result:
+            return result
+    except Exception as e:
+        print(f"⚠️  Could not fetch student details: {e}")
+    
+    return None
+
+
+def format_student_info(student_details: dict) -> str:
+    """Format student details for LLM context"""
+    if not student_details:
+        return ""
+    
+    info = f"""
+Student Information:
+- Name: {student_details.get('name', 'N/A')}
+- CGPA: {student_details.get('cgpa', 'N/A')}
+- SGPA: {student_details.get('sgpa', 'N/A')}
+- Batch: {student_details.get('batch', 'N/A')}
+- Email: {student_details.get('email', 'N/A')}
+"""
+    
+    if student_details.get('subjects'):
+        info += "\nSubjects Taken:\n"
+        for subject in student_details['subjects'][:10]:
+            info += f"- {subject.get('code', 'N/A')}: {subject.get('name', 'N/A')} ({subject.get('grade', 'N/A')})\n"
+    
+    return info
 
 
 # ==================== ROUTES ====================
@@ -291,10 +379,25 @@ Rules:
 @app.post("/chat")
 async def chat(req: ChatRequest):
     """
-    Chat endpoint with 2 modes:
-    1. Analysis Mode - for "most asked questions" type queries
-    2. Detailed Mode - for specific questions and explanations
+    Chat endpoint with enhanced features:
+    1. Extracts student roll numbers and fetches their details
+    2. Analysis Mode - for "most asked questions" type queries
+    3. Detailed Mode - for specific questions and explanations
     """
+    
+    # FEATURE 1: Extract roll number and fetch student details
+    student_roll_info = extract_roll_number(req.message)
+    student_details = None
+    student_context = ""
+    
+    if student_roll_info:
+        student_details = get_student_details(
+            student_roll_info["roll"], 
+            student_roll_info["batch"]
+        )
+        if student_details:
+            student_context = format_student_info(student_details)
+            print(f"✅ Student data fetched for {student_roll_info['roll']}")
     
     # Detect query mode
     mode = detect_query_mode(req.message)
@@ -306,7 +409,8 @@ async def chat(req: ChatRequest):
             structured = format_mongodb_response(intercept_result)
             return {
                 "reply": structured,
-                "thinking": None
+                "thinking": None,
+                "student_data": student_details if student_context else None
             }
     
     # DETAILED MODE: Send ACTUAL similar questions to LLM with strict instructions
@@ -320,8 +424,10 @@ async def chat(req: ChatRequest):
             formatted_questions.append(f"{i}. {q.get('question', '')}")
         questions_text = "\n".join(formatted_questions)
     
-    # Build prompt - QUESTION GENERATION focused
-    detailed_prompt = f"""You are an exam assistant.
+    # Build prompt - Include student data if available
+    detailed_prompt = f"""You are an exam assistant and student advisor.
+
+{student_context}
 
 Topic: {req.message}
 
@@ -379,7 +485,8 @@ Rules:
 
     return {
         "reply": structured,
-        "thinking": thinking_text
+        "thinking": thinking_text,
+        "student_data": student_details if student_context else None
     }
 
 
@@ -423,6 +530,153 @@ async def upload_file(file: UploadFile = File(...)):
 
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/bulk-ingest")
+async def bulk_ingest(folder_path: str):
+    """
+    🥇 INDUSTRY-LEVEL BULK INGESTION WITH RESUME CAPABILITY
+    
+    Processes all PDFs in a folder with automatic tracking.
+    If processing is interrupted, just call again - skips already processed files!
+    
+    Args:
+        folder_path: Path to folder containing PDFs
+                     e.g., "Backend/DTU PYQs COE (2024 Updated)"
+    
+    Returns:
+        Detailed ingestion report with resume capability
+    """
+    try:
+        results = {
+            "queued": [],
+            "skipped": [],
+            "processed": [],
+            "errors": []
+        }
+        
+        # Check if folder exists
+        if not os.path.isdir(folder_path):
+            return {
+                "error": f"Folder not found: {folder_path}",
+                "status": "failed"
+            }
+        
+        # Find all PDF files recursively
+        pdf_files = list(Path(folder_path).glob("**/*.pdf"))
+        
+        if not pdf_files:
+            return {
+                "message": "No PDF files found in folder",
+                "folder": folder_path,
+                "status": "no_files"
+            }
+        
+        print(f"\n📂 BULK INGESTION STARTED")
+        print(f"📁 Folder: {folder_path}")
+        print(f"📄 Total PDFs found: {len(pdf_files)}")
+        print(f"✅ Already processed: {get_processed_count(folder_path)}")
+        
+        # Process each PDF
+        for idx, pdf_path in enumerate(pdf_files, 1):
+            file_path_str = str(pdf_path)
+            filename = pdf_path.name
+            
+            # 🔥 CHECK IF ALREADY PROCESSED
+            if is_processed(file_path_str):
+                print(f"⏩ [{idx}/{len(pdf_files)}] Skipping (already done): {filename}")
+                results["skipped"].append({
+                    "file": filename,
+                    "reason": "already_processed"
+                })
+                continue
+            
+            # Extract subject from filename
+            filename_clean = pdf_path.stem.lower()
+            
+            if '_' in filename_clean:
+                subject = filename_clean.split('_')[0]
+            elif '-' in filename_clean:
+                subject = filename_clean.split('-')[0]
+            else:
+                subject = filename_clean
+            
+            print(f"🔄 [{idx}/{len(pdf_files)}] Processing: {filename} → Subject: {subject}")
+            
+            try:
+                # Process the PDF
+                result = process_pdf(file_path_str, subject=subject)
+                
+                if result["status"] == "success":
+                    questions_count = result.get("questions_extracted", 0)
+                    
+                    # ✅ MARK AS PROCESSED ONLY IF SUCCESSFUL
+                    mark_processed(file_path_str, subject, questions_count)
+                    
+                    results["processed"].append({
+                        "file": filename,
+                        "subject": subject,
+                        "questions_extracted": questions_count
+                    })
+                    print(f"   ✅ Success: {questions_count} questions extracted")
+                else:
+                    # If no questions extracted, still mark as processed to avoid retry
+                    if questions_count == 0:
+                        mark_processed(file_path_str, subject, 0)
+                        results["skipped"].append({
+                            "file": filename,
+                            "reason": "no_questions_extracted"
+                        })
+                        print(f"   ⚠️  Skipped: No questions found")
+                    else:
+                        results["errors"].append({
+                            "file": filename,
+                            "error": result.get("error", "Unknown error")
+                        })
+                        print(f"   ❌ Error: {result.get('error', 'Unknown error')}")
+                        
+            except Exception as e:
+                results["errors"].append({
+                    "file": filename,
+                    "error": str(e)
+                })
+                print(f"   ❌ Exception: {str(e)}")
+        
+        # Summary
+        total_questions = sum(r.get("questions_extracted", 0) for r in results["processed"])
+        
+        summary = {
+            "status": "completed",
+            "folder": folder_path,
+            "summary": {
+                "total_pdfs_found": len(pdf_files),
+                "newly_processed": len(results["processed"]),
+                "skipped_already_done": len(results["skipped"]),
+                "errors": len(results["errors"]),
+                "total_questions_ingested": total_questions
+            },
+            "resume_info": {
+                "if_interrupted": "Just call this endpoint again with same folder_path",
+                "skipped_files_will_not_reprocess": True,
+                "processing_can_resume": True
+            },
+            "details": results
+        }
+        
+        print(f"\n🎉 BULK INGESTION COMPLETED")
+        print(f"✅ Newly processed: {len(results['processed'])}")
+        print(f"⏩ Skipped: {len(results['skipped'])}")
+        print(f"❌ Errors: {len(results['errors'])}")
+        print(f"📊 Total questions: {total_questions}")
+        
+        return summary
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "failed",
+            "folder": folder_path
+        }
 
 
 @app.post("/ask")
@@ -496,6 +750,52 @@ async def health():
         "status": "healthy",
         "total_questions": get_question_count()
     }
+
+
+@app.get("/status")
+async def bulk_ingest_status():
+    """Get bulk ingestion system status and statistics"""
+    try:
+        total_questions = get_question_count()
+        processed_count = processed_files.count_documents({})
+        subjects = get_subjects_stats()
+        
+        # Get recent processed files
+        recent_files = list(processed_files.find().sort("processed_at", -1).limit(5))
+        
+        # Format recent files for response
+        recent_files_formatted = []
+        for f in recent_files:
+            recent_files_formatted.append({
+                "file_path": f.get("file_path"),
+                "subject": f.get("subject"),
+                "questions_extracted": f.get("questions_extracted", 0),
+                "processed_at": f.get("processed_at").isoformat() if f.get("processed_at") else None
+            })
+        
+        return {
+            "status": "operational",
+            "bulk_ingestion": {
+                "total_processed_files": processed_count,
+                "last_5_processed": recent_files_formatted
+            },
+            "questions_database": {
+                "total_questions": total_questions,
+                "subjects": subjects
+            },
+            "endpoints": {
+                "/chat": "✓ Active",
+                "/uploadfile": "✓ Active",
+                "/bulk-ingest": "✓ Active",
+                "/result/{roll}/{batch}": "✓ Active",
+                "/stats": "✓ Active"
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
 
 # ==================== RESULT SERVICE - DTU RESULTHUB ====================
