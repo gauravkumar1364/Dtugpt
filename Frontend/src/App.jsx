@@ -192,13 +192,13 @@ function App() {
 
         {/* --- Main Content Area --- */}
         <div className="flex-1 p-5 text-[#d6d6d6] bg-[#111111] text-xl flex flex-col min-w-0">
-          <nav className="border-b border-[#252525] mb-5 p-5 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
+          <nav className="border-b border-[#252525] mb-5 px-6 py-4 shadow-[0_1px_8px_rgba(0,0,0,0.3)]">
             <ul className="flex justify-between items-center">
-              <li className="font-semibold tracking-wide text-sm text-[#bfbfbf]">DTU GPT</li>
-              <li className="flex items-center gap-3">
-                {/* Clerk Auth UI */}
+              <li className="font-bold tracking-wider text-lg text-[#1f6feb]">DTU GPT</li>
+              <li>
+                {/* Clerk Auth UI - Top Right Corner */}
                 <Show when="signed-out">
-                  <div className="flex gap-3">
+                  <div className="flex gap-2 items-center">
                     <SignInButton 
                       mode="modal"
                       forceRedirectUrl="/"
@@ -206,8 +206,8 @@ function App() {
                       appearance={{
                         baseTheme: undefined,
                         elements: {
-                          button: "px-4 py-2 rounded-lg font-medium text-sm bg-[#1f6feb] text-white hover:bg-[#1a5fd9] transition-colors border-0",
-                          buttonBase: "transition-colors"
+                          button: "px-6 py-2.5 rounded-lg font-semibold text-sm bg-[#1f6feb] text-white hover:bg-[#1a5cd9] active:bg-[#1550c7] shadow-lg hover:shadow-xl hover:shadow-[#1f6feb]/20 transition-all duration-200 border-0 cursor-pointer hover:scale-105",
+                          buttonBase: "transition-all duration-200"
                         }
                       }}
                     />
@@ -218,26 +218,29 @@ function App() {
                       appearance={{
                         baseTheme: undefined,
                         elements: {
-                          button: "px-4 py-2 rounded-lg font-medium text-sm bg-[#2d2d2d] text-white hover:bg-[#3a3a3a] border border-[#404040] transition-colors",
-                          buttonBase: "transition-colors"
+                          button: "px-6 py-2.5 rounded-lg font-semibold text-sm bg-[#2d2d2d] text-[#e5e5e5] hover:bg-[#3d3d3d] active:bg-[#4a4a4a] border border-[#404040] hover:border-[#505050] shadow-lg hover:shadow-xl hover:shadow-[#404040]/20 transition-all duration-200 cursor-pointer hover:scale-105",
+                          buttonBase: "transition-all duration-200"
                         }
                       }}
                     />
                   </div>
                 </Show>
                 <Show when="signed-in">
-                  <UserButton 
-                    afterSignOutUrl="/"
-                    userProfileMode="navigation"
-                    userProfileUrl="/user-profile"
-                    appearance={{
-                      elements: {
-                        avatarBox: "w-10 h-10 rounded-lg",
-                        userButtonPopoverCard: "bg-[#1a1a1a] border border-[#404040]",
-                        userButtonPopoverActionButtonText: "text-[#e5e5e5]",
-                      }
-                    }}
-                  />
+                  <div className="flex items-center justify-end">
+                    <UserButton 
+                      afterSignOutUrl="/"
+                      userProfileMode="navigation"
+                      userProfileUrl="/user-profile"
+                      appearance={{
+                        baseTheme: undefined,
+                        elements: {
+                          avatarBox: "w-11 h-11 rounded-full ring-2 ring-[#1f6feb] hover:ring-[#1a5cd9] transition-all duration-200 shadow-lg",
+                          userButtonPopoverCard: "bg-[#151515] border border-[#2d2d2d] shadow-2xl",
+                          userButtonPopoverActionButtonText: "text-[#e5e5e5] hover:text-white",
+                        }
+                      }}
+                    />
+                  </div>
                 </Show>
               </li>
             </ul>
