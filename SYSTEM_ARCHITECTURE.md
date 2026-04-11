@@ -1,7 +1,7 @@
 # DTU GPT - Complete System Architecture
 
-**Last Updated**: April 2026  
-**Version**: 2.0  
+**Last Updated**: April 2026
+**Version**: 2.0
 **Status**: Production Ready
 
 ---
@@ -17,8 +17,8 @@
 7. [API Endpoints](#api-endpoints)
 8. [Data Flow](#data-flow)
 9. [Service Layer](#service-layer)
-10. [Authentication & Security](#authentication--security)
-11. [Deployment & Infrastructure](#deployment--infrastructure)
+10. [Authentication &amp; Security](#authentication--security)
+11. [Deployment &amp; Infrastructure](#deployment--infrastructure)
 
 ---
 
@@ -48,15 +48,15 @@
 
 ### Key Components
 
-| Component | Purpose | Technology |
-|-----------|---------|-----------|
-| **Frontend UI** | User interface for chat & file upload | React 19.2.4, Vite 8.0.1 |
-| **Authentication** | User session & identity management | Clerk.com |
-| **Backend API** | Core business logic & request handling | FastAPI, Uvicorn |
-| **LLM Integration** | AI responses & question analysis | Groq API (Qwen 3-32B) |
-| **Vector DB** | Semantic search for questions | FAISS (local) + MongoDB |
-| **Primary DB** | Question storage & analytics | MongoDB Atlas |
-| **Web Scraping** | DTU ResultHub data extraction | Selenium + BeautifulSoup |
+| Component                 | Purpose                                | Technology               |
+| ------------------------- | -------------------------------------- | ------------------------ |
+| **Frontend UI**     | User interface for chat & file upload  | React 19.2.4, Vite 8.0.1 |
+| **Authentication**  | User session & identity management     | Clerk.com                |
+| **Backend API**     | Core business logic & request handling | FastAPI, Uvicorn         |
+| **LLM Integration** | AI responses & question analysis       | Groq API (Qwen 3-32B)    |
+| **Vector DB**       | Semantic search for questions          | FAISS (local) + MongoDB  |
+| **Primary DB**      | Question storage & analytics           | MongoDB Atlas            |
+| **Web Scraping**    | DTU ResultHub data extraction          | Selenium + BeautifulSoup |
 
 ---
 
@@ -509,6 +509,7 @@ Backend/
 ```
 
 **Indexes:**
+
 ```javascript
 // Index 1: Subject + Topic lookup
 db.questions.createIndex({subject: 1, topic: 1})
@@ -542,6 +543,7 @@ db.questions.createIndex({subject: 1})
 ```
 
 **Indexes:**
+
 ```javascript
 // Index 1: Prevent duplicate processing
 db.processed_files.createIndex({file_path: 1}, {unique: true})
@@ -597,19 +599,19 @@ question_id_map: dict[int, str]
 
 ### Endpoint Summary Table
 
-| Method | Endpoint | Purpose | Auth Required | Response |
-|--------|----------|---------|---------------|----------|
-| POST | `/chat` | Chat with AI (3 modes) | Optional | JSON object with reply/thinking |
-| POST | `/uploadfile` | Upload & process PDF(s) | Optional | Extracted questions + analysis |
-| POST | `/bulk-ingest` | Batch process folder | No | Processing summary + stats |
-| POST | `/ask` | Direct question query | No | Answer from knowledge base |
-| GET | `/important-questions` | Top frequency questions | No | Sorted question list |
-| GET | `/trending-topics` | Popular topics | No | Topic with frequency stats |
-| GET | `/stats` | Database statistics | No | Counts + metadata |
-| GET | `/health` | Server health check | No | Status + uptime |
-| GET | `/status` | Ingestion statistics | No | Processed file count |
-| GET | `/result/{roll}/{batch}` | Student CGPA/results | No | Student data object |
-| GET | `/result/debug/{roll}/{batch}` | Debug scraping HTML | No | Raw HTML returned |
+| Method | Endpoint                         | Purpose                 | Auth Required | Response                        |
+| ------ | -------------------------------- | ----------------------- | ------------- | ------------------------------- |
+| POST   | `/chat`                        | Chat with AI (3 modes)  | Optional      | JSON object with reply/thinking |
+| POST   | `/uploadfile`                  | Upload & process PDF(s) | Optional      | Extracted questions + analysis  |
+| POST   | `/bulk-ingest`                 | Batch process folder    | No            | Processing summary + stats      |
+| POST   | `/ask`                         | Direct question query   | No            | Answer from knowledge base      |
+| GET    | `/important-questions`         | Top frequency questions | No            | Sorted question list            |
+| GET    | `/trending-topics`             | Popular topics          | No            | Topic with frequency stats      |
+| GET    | `/stats`                       | Database statistics     | No            | Counts + metadata               |
+| GET    | `/health`                      | Server health check     | No            | Status + uptime                 |
+| GET    | `/status`                      | Ingestion statistics    | No            | Processed file count            |
+| GET    | `/result/{roll}/{batch}`       | Student CGPA/results    | No            | Student data object             |
+| GET    | `/result/debug/{roll}/{batch}` | Debug scraping HTML     | No            | Raw HTML returned               |
 
 ### Endpoint Specifications
 
@@ -618,6 +620,7 @@ question_id_map: dict[int, str]
 **Purpose**: Main chat endpoint with 3 intelligent modes
 
 **Request Body**:
+
 ```json
 {
   "message": "What questions might come for flip-flops? 2K19/EC/107"
@@ -625,6 +628,7 @@ question_id_map: dict[int, str]
 ```
 
 **Response (200 OK)**:
+
 ```json
 {
   "reply": {
@@ -645,11 +649,13 @@ question_id_map: dict[int, str]
 ```
 
 **Query Modes**:
+
 - **Analysis Mode**: When asking "most asked", "frequency", "topics"
 - **Questions Mode**: When asking "questions", "predict", "pyq", "what questions"
 - **Explanation Mode**: Default for all other queries
 
 **Features**:
+
 - ✅ Automatic student roll number extraction
 - ✅ Fetches student CGPA/details from DTU ResultHub
 - ✅ Context-aware LLM responses
@@ -662,12 +668,14 @@ question_id_map: dict[int, str]
 **Purpose**: Upload PDFs for processing and question extraction
 
 **Request**: Form data with file upload
+
 ```
 Content-Type: multipart/form-data
 File: <PDF file>
 ```
 
 **Response (200 OK)**:
+
 ```json
 {
   "file_name": "CO305_2024.pdf",
@@ -680,6 +688,7 @@ File: <PDF file>
 ```
 
 **Features**:
+
 - ✅ PDF text extraction (pdfplumber)
 - ✅ OCR support for scanned documents (Tesseract)
 - ✅ LLM-powered question extraction
@@ -694,6 +703,7 @@ File: <PDF file>
 **Purpose**: Batch process all PDFs in a folder
 
 **Request Body**:
+
 ```json
 {
   "folder_path": "Backend/DTU PYQs COE (2024 Updated)"
@@ -701,6 +711,7 @@ File: <PDF file>
 ```
 
 **Response (200 OK)**:
+
 ```json
 {
   "total_files": 45,
@@ -720,6 +731,7 @@ File: <PDF file>
 ```
 
 **Features**:
+
 - ✅ Recursive folder scanning
 - ✅ MongoDB file tracking (no re-processing)
 - ✅ Subject auto-detection from folder names
@@ -733,12 +745,14 @@ File: <PDF file>
 **Purpose**: Fetch student CGPA, SGPA, and academic details
 
 **Path Parameters**:
+
 ```
 roll: "2K19/EC/107"  (Roll number format)
 batch: "2019"        (Admission year)
 ```
 
 **Response (200 OK)**:
+
 ```json
 {
   "roll": "2K19/EC/107",
@@ -760,12 +774,14 @@ batch: "2019"        (Admission year)
 ```
 
 **Features**:
+
 - ✅ Selenium web scraping (primary)
 - ✅ Requests fallback (if JS rendering fails)
 - ✅ Multi-format HTML parsing
 - ✅ Error handling
 
 **Failure Response (404)**:
+
 ```json
 {
   "error": "Student not found",
@@ -780,6 +796,7 @@ batch: "2019"        (Admission year)
 **Purpose**: Get system-wide statistics
 
 **Response (200 OK)**:
+
 ```json
 {
   "total_questions": 3847,
@@ -803,11 +820,13 @@ batch: "2019"        (Admission year)
 **Purpose**: Get most frequently asked questions
 
 **Query Parameters**:
+
 ```
 ?subject=CO305&limit=10
 ```
 
 **Response (200 OK)**:
+
 ```json
 {
   "subject": "CO305",
@@ -830,6 +849,7 @@ batch: "2019"        (Admission year)
 **Purpose**: Get trending topics across PYQs
 
 **Response (200 OK)**:
+
 ```json
 {
   "trending": [
@@ -848,6 +868,7 @@ batch: "2019"        (Admission year)
 ### Error Handling
 
 **Standard Error Response**:
+
 ```json
 {
   "status": "error",
@@ -858,6 +879,7 @@ batch: "2019"        (Admission year)
 ```
 
 **HTTP Status Codes**:
+
 - `200` - Success
 - `400` - Bad request (invalid parameters)
 - `404` - Resource not found
@@ -1070,17 +1092,21 @@ Final summary:
 ### Service Responsibilities
 
 #### `pdf_service.py`
+
 **Responsibility**: PDF extraction and question generation
 
 **Key Functions**:
+
 - `extract_text_from_pdf(pdf_bytes, use_ocr)` - Extract text from PDF with OCR fallback
 - `clean_and_extract_questions_with_llm(text)` - LLM-powered question extraction
 - `format_pdf_response(questions, text)` - Format extraction results
 
 **Dependencies**:
+
 - pdfplumber, pdf2image, pytesseract, Groq LLM
 
 **Error Handling**:
+
 - Corrupted PDF → Fall back to OCR
 - OCR fails → Return raw text
 - LLM timeout → Store raw questions
@@ -1088,9 +1114,11 @@ Final summary:
 ---
 
 #### `embedding.py`
+
 **Responsibility**: Vector embeddings and semantic search
 
 **Key Functions**:
+
 - `generate_embeddings(text)` - Create 384D vectors
 - `store_questions(questions, subject)` - Save to MongoDB + FAISS
 - `search_similar(query, top_k)` - Semantic similarity search
@@ -1098,49 +1126,60 @@ Final summary:
 - `add_to_faiss_index(embedding)` - Add new vectors to index
 
 **Dependencies**:
+
 - sentence-transformers, faiss-cpu, pymongo
 
 **Performance**:
+
 - Search time: ~10ms for 10,000 embeddings
 - Index creation: ~5 seconds for 5,000 vectors
 
 ---
 
 #### `query_service.py`
+
 **Responsibility**: Query answering with context
 
 **Key Functions**:
+
 - `answer_query(query, context)` - LLM query answering
 - `format_question_context(questions)` - Structure reference questions
 
 **Dependencies**:
+
 - Groq LLM, embedding.py
 
 ---
 
 #### `analytics.py`
+
 **Responsibility**: Statistics and trending analysis
 
 **Key Functions**:
+
 - `get_most_asked_questions(subject)` - Question frequency sorting
 - `get_most_asked_topics(subject, limit)` - Topic popularity
 - `get_subjects_stats()` - Per-subject statistics
 - `get_question_count()` - Total question count
 
 **Dependencies**:
+
 - pymongo aggregation queries
 
 ---
 
 #### `response_formatter.py`
+
 **Responsibility**: Output formatting and cleanup
 
 **Key Functions**:
+
 - `structure_llm_output(text, return_format)` - Parse LLM response
 - `clean_markdown(text)` - Markdown cleanup
 - `format_mongodb_response(doc)` - Format DB results
 
 **Output Formats**:
+
 - JSON: Structured response
 - Markdown: Formatted text
 - Plain text: Simplified version
@@ -1148,15 +1187,18 @@ Final summary:
 ---
 
 #### `result_service.py`
+
 **Responsibility**: DTU ResultHub scraping
 
 **Key Functions**:
+
 - `fetch_result_selenium(roll, batch)` - Browser-based scraping
 - `fetch_result_requests(roll, batch)` - HTTP fallback
 - `extract_subject_grades(html)` - Grade parsing
 - `fetch_result(roll, batch)` - Main orchestrator
 
 **Fallback Strategy**:
+
 1. Try Selenium (handles JS rendering)
 2. Fall back to Requests (HTTP-only)
 3. Return error if both fail
@@ -1164,15 +1206,18 @@ Final summary:
 ---
 
 #### `bulk_ingest.py`
+
 **Responsibility**: Batch processing multiple PDFs
 
 **Key Functions**:
+
 - `process_all_subjects(folder_path)` - Folder scan
 - `process_subject_folder(subject, folder)` - Subject processing
 - `is_processed(file_path)` - Check MongoDB tracking
 - `mark_processed(file_path, stats)` - Record in DB
 
 **Resume Logic**:
+
 - Query MongoDB for already-processed files
 - Skip file if `file_path` exists in `processed_files`
 - Progress continues from last successful file
@@ -1193,6 +1238,7 @@ Clerk.com handles:
 ```
 
 **Integration Points**:
+
 ```javascript
 // App.jsx → Clerk components
 <ClerkProvider
@@ -1279,11 +1325,11 @@ npm run dev
 
 ```
 Backend Deployment:
-├─ Server: Uvicorn (or Gunicorn)
+├─ Server: Uvicorn 
 ├─ Process Manager: Systemd / Supervisor
 ├─ Reverse Proxy: Nginx
 ├─ SSL/TLS: Let's Encrypt
-└─ Database: MongoDB Atlas (managed)
+└─ Database: MongoDB Atlas 
 
 Frontend Deployment:
 ├─ Build: npm run build
@@ -1329,29 +1375,30 @@ Health Checks:
 
 ### Key Metrics
 
-| Metric | Value |
-|--------|-------|
-| Frontend bundle size | ~2.5 MB (Vite optimized) |
-| Backend startup time | ~5-10 seconds |
-| FAISS search latency | ~10-50ms |
-| MongoDB query latency | ~50-200ms |
-| PDF processing time | 30-60 seconds/file |
-| Max concurrent users | 100+ (depends on backend hosting) |
+| Metric                | Value                             |
+| --------------------- | --------------------------------- |
+| Frontend bundle size  | ~2.5 MB (Vite optimized)          |
+| Backend startup time  | ~5-10 seconds                     |
+| FAISS search latency  | ~10-50ms                          |
+| MongoDB query latency | ~50-200ms                         |
+| PDF processing time   | 30-60 seconds/file                |
+| Max concurrent users  | 100+ (depends on backend hosting) |
 
 ### Architecture Strengths
 
-✅ **Modular Design** - Service layer separates concerns  
-✅ **Semantic Search** - FAISS + embeddings for relevance  
-✅ **LLM Integration** - Groq API for fast inference  
-✅ **Scalable** - MongoDB Atlas + stateless backend  
-✅ **Resilient** - Fallback mechanisms (Selenium → Requests)  
-✅ **User Context** - Student data enrichment for personalization  
-✅ **Async Operations** - FastAPI for concurrent requests  
-✅ **Modern Frontend** - React 19 + Vite for DX  
+✅ **Modular Design** - Service layer separates concerns
+✅ **Semantic Search** - FAISS + embeddings for relevance
+✅ **LLM Integration** - Groq API for fast inference
+✅ **Scalable** - MongoDB Atlas + stateless backend
+✅ **Resilient** - Fallback mechanisms (Selenium → Requests)
+✅ **User Context** - Student data enrichment for personalization
+✅ **Async Operations** - FastAPI for concurrent requests
+✅ **Modern Frontend** - React 19 + Vite for DX
 
 ### Future Enhancements
 
 🚀 **Planned Improvements**:
+
 - WebSocket support for real-time chat streaming
 - Advanced caching (Redis)
 - SQL-based analytics database
@@ -1374,6 +1421,6 @@ Health Checks:
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: April 12, 2026  
-**Maintained By**: Development Team
+**Document Version**: 2.0
+**Last Updated**: April 12, 2026
+**Maintained By**:  Gaurav kumar
