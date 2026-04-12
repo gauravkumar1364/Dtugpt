@@ -1,10 +1,24 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import os
 import faiss
 from db import questions_collection
 
-# Initialize embedding model
-embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+# Lazy-load embedding model to prevent Render startup hangs
+embed_model = None
+
+def get_embed_model():
+    """Lazy-initialize embedding model on first use"""
+    global embed_model
+    if embed_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            print("⏳ Loading embedding model (first use - cached after)...")
+            embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+            print("✅ Embedding model loaded")
+        except Exception as e:
+            print(f"❌ Failed to load embedding model: {e}")
+            return None
+    return embed_model
 
 # FAISS index
 dimension = 384
@@ -21,6 +35,12 @@ def store_questions(subject: str, questions: list[str]) -> None:
     global questions_db, index
     
     if not questions:
+        return
+    
+    # Get embedding model
+    embed_model = get_embed_model()
+    if not embed_model:
+        print("⚠️  Embedding model unavailable - storing without embeddings")
         return
     
     # Generate embeddings
@@ -59,6 +79,12 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
     if len(questions_db) == 0:
         return []
     
+    # Get embedding model
+    embed_model = get_embed_model()
+    if not embed_model:
+        print("⚠️  Embedding model unavailable - search disabled")
+        return []
+    
     # Encode query
     query_embedding = embed_model.encode([query])
     
@@ -86,46 +112,26 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
 
 def load_questions_from_db() -> None:
     """
-    Load all questions from MongoDB into memory/FAISS on startup
-    Critical for data persistence across restarts
+    Load all questions from MongoDB into memory on startup
+    Skip FAISS index building to prevent startup hangs on Render
     """
     global questions_db, index
     
-    questions_db.clear()
-    index = faiss.IndexFlatL2(dimension)
-    
-    all_questions = list(questions_collection.find({}, {"_id": 0}))
-    
-    if not all_questions:
-        print("ℹ️  No questions in MongoDB yet")
-        return
-    
-    # Extract questions that need embeddings
-    questions_to_embed = []
-    for doc in all_questions:
-        if "embedding" not in doc or not doc["embedding"]:
-            questions_to_embed.append(doc["question"])
-    
-    # Generate embeddings for missing ones
-    if questions_to_embed:
-        print(f"🔄 Generating embeddings for {len(questions_to_embed)} questions...")
-        new_embeddings = embed_model.encode(questions_to_embed)
+    try:
+        print("⏳ Loading questions from MongoDB...")
+        questions_db.clear()
+        index = faiss.IndexFlatL2(dimension)
         
-        for question, embedding in zip(questions_to_embed, new_embeddings):
-            questions_collection.update_one(
-                {"question": question},
-                {"$set": {"embedding": embedding.tolist()}}
-            )
-    
-    # Reload all questions with complete embeddings
-    all_questions = list(questions_collection.find({}, {"_id": 0}))
-    
-    # Build FAISS index
-    embeddings = []
-    for doc in all_questions:
-        questions_db.append(doc)
-        embeddings.append(doc["embedding"])
-    
-    if embeddings:
-        index.add(np.array(embeddings, dtype=np.float32))
-        print(f"✅ Loaded {len(embeddings)} questions into FAISS from MongoDB")
+        all_questions = list(questions_collection.find({}, {"_id": 0}))
+        
+        if not all_questions:
+            print("ℹ️  No questions in MongoDB yet")
+            return
+        
+        # Just load into memory - don't rebuild FAISS index (too slow)
+        questions_db = all_questions
+        print(f"✅ Loaded {len(all_questions)} questions into memory (FAISS lazy-built on first search)")
+        
+    except Exception as e:
+        print(f"⚠️  Error loading questions on startup: {e}")
+        print("💡 Questions will load from MongoDB on-demand")
