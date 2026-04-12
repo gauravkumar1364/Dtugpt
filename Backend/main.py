@@ -439,51 +439,51 @@ async def chat(req: ChatRequest):
     2. Questions Mode - predict likely exam questions
     3. Explanation Mode - provide concept explanations and details
     """
-    
-    # FEATURE 1: Extract roll number and fetch student details
-    student_roll_info = extract_roll_number(req.message)
-    student_details = None
-    student_context = ""
-    
-    if student_roll_info:
-        student_details = get_student_details(
-            student_roll_info["roll"], 
-            student_roll_info["batch"]
-        )
-        if student_details:
-            student_context = format_student_info(student_details)
-            print(f"✅ Student data fetched for {student_roll_info['roll']}")
-    
-    # Detect query mode
-    mode = detect_query_mode(req.message)
-    print(f"📋 Query Mode: {mode}")
-    
-    # ========== ANALYSIS MODE: Return frequency analysis ==========
-    if mode == "analysis":
-        intercept_result = intercept_query(req.message)
-        if intercept_result:
-            structured = format_mongodb_response(intercept_result)
-            return {
-                "reply": structured,
-                "thinking": None,
-                "student_data": student_details if student_context else None
-            }
-    
-    # Get similar questions for context
-    search_results = search_similar(req.message, top_k=10)
-    
-    # ========== QUESTIONS MODE: Generate expected exam questions ==========
-    if mode == "questions":
-        # Format ACTUAL questions for LLM
-        questions_text = ""
-        if search_results:
-            formatted_questions = []
-            for i, q in enumerate(search_results, 1):
-                formatted_questions.append(f"{i}. {q.get('question', '')}")
-            questions_text = "\n".join(formatted_questions)
+    try:
+        # FEATURE 1: Extract roll number and fetch student details
+        student_roll_info = extract_roll_number(req.message)
+        student_details = None
+        student_context = ""
         
-        # Build prompt for QUESTION PREDICTION
-        questions_prompt = f"""You are an exam assistant and student advisor.
+        if student_roll_info:
+            student_details = get_student_details(
+                student_roll_info["roll"], 
+                student_roll_info["batch"]
+            )
+            if student_details:
+                student_context = format_student_info(student_details)
+                print(f"✅ Student data fetched for {student_roll_info['roll']}")
+        
+        # Detect query mode
+        mode = detect_query_mode(req.message)
+        print(f"📋 Query Mode: {mode}")
+        
+        # ========== ANALYSIS MODE: Return frequency analysis ==========
+        if mode == "analysis":
+            intercept_result = intercept_query(req.message)
+            if intercept_result:
+                structured = format_mongodb_response(intercept_result)
+                return {
+                    "reply": structured,
+                    "thinking": None,
+                    "student_data": student_details if student_context else None
+                }
+        
+        # Get similar questions for context
+        search_results = search_similar(req.message, top_k=10)
+        
+        # ========== QUESTIONS MODE: Generate expected exam questions ==========
+        if mode == "questions":
+            # Format ACTUAL questions for LLM
+            questions_text = ""
+            if search_results:
+                formatted_questions = []
+                for i, q in enumerate(search_results, 1):
+                    formatted_questions.append(f"{i}. {q.get('question', '')}")
+                questions_text = "\n".join(formatted_questions)
+            
+            # Build prompt for QUESTION PREDICTION
+            questions_prompt = f"""You are an exam assistant and student advisor.
 
 {student_context}
 
@@ -526,26 +526,26 @@ Rules:
 - NO explanations or key points
 - Concise format
 - Under 100 words total"""  
+            
+            llm = get_llm_model()
+            if not llm:
+                return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
+            
+            response = llm.invoke(questions_prompt)
+            raw_text = response.content
         
-        llm = get_llm_model()
-        if not llm:
-            return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
-        
-        response = llm.invoke(questions_prompt)
-        raw_text = response.content
-    
-    # ========== EXPLANATION MODE: Provide concept explanation ==========
-    else:
-        # Format reference questions for context
-        context_questions = ""
-        if search_results:
-            formatted_questions = []
-            for i, q in enumerate(search_results[:5], 1):
-                formatted_questions.append(f"{i}. {q.get('question', '')}")
-            context_questions = "\n".join(formatted_questions)
-        
-        # Build prompt for EXPLANATION
-        explanation_prompt = f"""You are an exam assistant and student advisor.
+        # ========== EXPLANATION MODE: Provide concept explanation ==========
+        else:
+            # Format reference questions for context
+            context_questions = ""
+            if search_results:
+                formatted_questions = []
+                for i, q in enumerate(search_results[:5], 1):
+                    formatted_questions.append(f"{i}. {q.get('question', '')}")
+                context_questions = "\n".join(formatted_questions)
+            
+            # Build prompt for EXPLANATION
+            explanation_prompt = f"""You are an exam assistant and student advisor.
 
 {student_context}
 
@@ -566,27 +566,37 @@ Format:
 - Bold important terms
 - Keep it under 300 words
 - Make it student-friendly"""
-        
-        llm = get_llm_model()
-        if not llm:
-            return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
-        
-        response = llm.invoke(explanation_prompt)
-        raw_text = response.content
+            
+            llm = get_llm_model()
+            if not llm:
+                return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
+            
+            response = llm.invoke(explanation_prompt)
+            raw_text = response.content
 
-    # Extract and remove thinking if present
-    thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
-    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-    thinking_text = thinking.group(1).strip() if thinking else None
+        # Extract and remove thinking if present
+        thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
+        cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+        thinking_text = thinking.group(1).strip() if thinking else None
 
-    # Structure the response
-    structured = structure_llm_output(cleaned, return_format="json")
+        # Structure the response
+        structured = structure_llm_output(cleaned, return_format="json")
 
-    return {
-        "reply": structured,
-        "thinking": thinking_text,
-        "student_data": student_details if student_context else None
-    }
+        return {
+            "reply": structured,
+            "thinking": thinking_text,
+            "student_data": student_details if student_context else None
+        }
+    
+    except Exception as e:
+        print(f"❌ Chat endpoint error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "reply": {"formatted_markdown": f"Error processing your request: {str(e)[:100]}"}, 
+            "thinking": None, 
+            "student_data": None
+        }
 
 
 @app.post("/uploadfile")
