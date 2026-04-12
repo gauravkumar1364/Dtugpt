@@ -35,15 +35,18 @@ llm_model = ChatGroq(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events using lifespan context manager"""
-    # Startup - load both questions and Q+A pairs
-    load_questions_from_db()
-    print("✅ DTU PYQ Assistant started - Questions and Q+A pairs loaded")
+    # Startup - load questions with error handling
+    try:
+        load_questions_from_db()
+        print("✅ DTU PYQ Assistant started - Questions and Q+A pairs loaded")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not load questions from DB: {e}")
+        print("⚠️  App starting in degraded mode - some features may not work")
     
     yield
     
     # Shutdown (if needed)
     print("🛑 DTU PYQ Assistant shutting down")
-
 
 # Initialize FastAPI with lifespan
 app = FastAPI(title="DTU PYQ Assistant", lifespan=lifespan)
