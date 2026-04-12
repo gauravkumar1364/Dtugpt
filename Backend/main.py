@@ -23,12 +23,27 @@ from services.result_service import fetch_result, get_result_by_details
 # Load environment variables
 load_dotenv()
 
-# Initialize LLM with token limits to prevent truncation
-llm_model = ChatGroq(
-    model="qwen/qwen3-32b",
-    max_tokens=1024,  # Limit output to 1024 tokens (~4000 chars)
-    temperature=0.7
-)
+# Lazy-initialize LLM to prevent startup crashes
+llm_model = None
+
+def get_llm_model():
+    """Lazy-initialize LLM (prevents crashes if API key missing)"""
+    global llm_model
+    if llm_model is None:
+        if not os.getenv("GROQ_API_KEY"):
+            print("⚠️  GROQ_API_KEY not configured")
+            return None
+        try:
+            llm_model = ChatGroq(
+                model="qwen/qwen3-32b",
+                max_tokens=1024,
+                temperature=0.7
+            )
+            print("✅ LLM initialized")
+        except Exception as e:
+            print(f"❌ LLM init failed: {e}")
+            return None
+    return llm_model
 
 
 # ==================== LIFESPAN EVENTS ====================
@@ -393,7 +408,11 @@ Rules:
     print(f"\n🔥 EXAM PREDICTION ENGINE for {subject}")
     print(f"Analyzing {len(all_questions_list)} questions to predict exam patterns")
     
-    response = llm_model.invoke(prompt)
+    llm = get_llm_model()
+    if not llm:
+        return {"title": "Service Unavailable", "formatted_markdown": "LLM not available", "sections": []}
+    
+    response = llm.invoke(prompt)
     raw_response = response.content
     
     # Structure the LLM response
@@ -498,7 +517,11 @@ Rules:
 - Concise format
 - Under 100 words total"""  
         
-        response = llm_model.invoke(questions_prompt)
+        llm = get_llm_model()
+        if not llm:
+            return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
+        
+        response = llm.invoke(questions_prompt)
         raw_text = response.content
     
     # ========== EXPLANATION MODE: Provide concept explanation ==========
@@ -534,7 +557,11 @@ Format:
 - Keep it under 300 words
 - Make it student-friendly"""
         
-        response = llm_model.invoke(explanation_prompt)
+        llm = get_llm_model()
+        if not llm:
+            return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
+        
+        response = llm.invoke(explanation_prompt)
         raw_text = response.content
 
     # Extract and remove thinking if present
