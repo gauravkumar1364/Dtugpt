@@ -5,8 +5,7 @@ import MessageDisplay from "./MessageDisplay";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 
 function App() {
-  // 1. State must live INSIDE the functional component
-  // 2. Use camelCase to match the variables in your JSX below
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [input,setinput] = useState("");
   const [messages,setmessages] = useState([]);
@@ -28,7 +27,7 @@ function App() {
     }
   }, []);
 
-  // 💾 Save chat history to localStorage whenever messages change
+  //  Save chat history to localStorage whenever messages change
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem("chatHistory", JSON.stringify(messages));

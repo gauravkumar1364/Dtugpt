@@ -75,7 +75,7 @@ app = FastAPI(title="DTU PYQ Assistant", lifespan=lifespan)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://dtugpt-rose.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
