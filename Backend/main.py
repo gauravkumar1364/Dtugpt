@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
 from pathlib import Path
@@ -34,19 +35,24 @@ llm_model = ChatGroq(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle startup and shutdown events using lifespan context manager"""
-    # Startup - load questions with error handling
+    """Handle startup and shutdown with timeout to prevent hangs on Render"""
     try:
-        load_questions_from_db()
-        print("✅ DTU PYQ Assistant started - Questions and Q+A pairs loaded")
+        print("⏳ Loading questions from database (30s timeout)...")
+        await asyncio.wait_for(
+            asyncio.to_thread(load_questions_from_db),
+            timeout=30.0
+        )
+        print("✅ DTU PYQ Assistant started successfully")
+    except asyncio.TimeoutError:
+        print("⚠️  Database loading timed out - starting in degraded mode")
+        print("💡 Search will fetch data on first request")
     except Exception as e:
-        print(f"⚠️  Warning: Could not load questions from DB: {e}")
-        print("⚠️  App starting in degraded mode - some features may not work")
+        print(f"⚠️  Database loading failed: {str(e)[:100]}")
+        print("💡 App will load data on-demand")
     
     yield
     
-    # Shutdown (if needed)
-    print("🛑 DTU PYQ Assistant shutting down")
+    print("🛑 Shutting down DTU PYQ Assistant")
 
 # Initialize FastAPI with lifespan
 app = FastAPI(title="DTU PYQ Assistant", lifespan=lifespan)
