@@ -1,30 +1,34 @@
-[project]
+[tool.poetry]
 name = "backend"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
+authors = ["Gaurav"]
+
+[tool.poetry.dependencies]
 python = ">=3.10,<3.14"
-dependencies = [
-    "beautifulsoup4>=4.14.3",
-    "faiss-cpu>=1.13.2",
-    "fastapi>=0.135.2",
-    "gdown>=5.2.1",
-    "langchain>=1.2.13",
-    "langchain-deepseek>=1.0.1",
-    "langchain-google-genai>=4.2.1",
-    "langchain-groq>=1.1.2",
-    "langchain-openai>=1.1.12",
-    "langgraph>=1.1.3",
-    "pdf2image>=1.17.0",
-    "pdfplumber>=0.11.9",
-    "pillow>=12.1.1",
-    "pydantic>=2.12.5",
-    "pymongo>=4.16.0",
-    "pytesseract>=0.3.13",
-    "python-dotenv>=1.2.2",
-    "python-multipart>=0.0.22",
-    "requests>=2.33.0",
-    "selenium>=4.42.0",
-    "sentence-transformers>=5.3.0",
-    "uvicorn>=0.42.0",
-]
+beautifulsoup4 = "*"
+faiss-cpu = "*"
+fastapi = "*"
+gdown = "*"
+langchain = "*"
+langchain-deepseek = "*"
+langchain-google-genai = "*"
+langchain-groq = "*"
+langchain-openai = "*"
+langgraph = "*"
+pdf2image = "*"
+pdfplumber = "*"
+pillow = "*"
+pydantic = "*"
+pymongo = "*"
+pytesseract = "*"
+python-dotenv = "*"
+python-multipart = "*"
+requests = "*"
+selenium = "*"
+sentence-transformers = "*"
+uvicorn = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
