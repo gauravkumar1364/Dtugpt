@@ -83,7 +83,17 @@ app.add_middleware(
 
 @app.get("/")
 def home():
-    return {"message": "DTU GPT API is running 🚀"}
+    return {"message": "DTU GPT API is running 🚀", "status": "healthy"}
+
+@app.options("/chat")
+async def options_chat():
+    """CORS preflight for /chat endpoint"""
+    return {"message": "OK"}
+
+@app.get("/test")
+def test():
+    """Test endpoint to verify app is running"""
+    return {"status": "API is working", "timestamp": str(__import__('datetime').datetime.now())}
 
 # ==================== BULK INGESTION FUNCTION ====================
 
