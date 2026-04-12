@@ -1,7 +1,8 @@
 import os
-from main import process_pdf  # reuse your function
+from main import process_pdf  
+from db import processed_files
 
-BASE_FOLDER = "download"   # folder from gdown
+BASE_FOLDER = "download"   
 
 
 def process_all_subjects():
