@@ -95,6 +95,86 @@ def test():
     """Test endpoint to verify app is running"""
     return {"status": "API is working", "timestamp": str(__import__('datetime').datetime.now())}
 
+# ==================== DEBUG ENDPOINTS ====================
+
+@app.post("/debug/instant")
+def debug_instant():
+    """Instant response test - if this works, backend is fine"""
+    return {"response": "instant reply", "status": "backend working"}
+
+@app.post("/debug/search")
+def debug_search(req: ChatRequest):
+    """Test FAISS search only"""
+    print("🔵 DEBUG SEARCH START")
+    try:
+        print("🔵 Calling search_similar()...")
+        results = search_similar(req.message, top_k=5)
+        print(f"✅ Search completed: {len(results)} results")
+        return {
+            "status": "search ok",
+            "results_count": len(results),
+            "results": results[:2]  # Return first 2
+        }
+    except Exception as e:
+        print(f"❌ Search error: {e}")
+        return {"status": "search failed", "error": str(e)}
+
+@app.post("/debug/llm")
+def debug_llm(req: ChatRequest):
+    """Test LLM call only"""
+    print("🔵 DEBUG LLM START")
+    try:
+        print("🔵 Getting LLM model...")
+        llm = get_llm_model()
+        
+        if not llm:
+            return {"status": "llm unavailable", "error": "GROQ_API_KEY not set"}
+        
+        print("🔵 Calling LLM.invoke()...")
+        prompt = f"Answer briefly: {req.message}"
+        response = llm.invoke(prompt)
+        print(f"✅ LLM response received: {len(response.content)} chars")
+        
+        return {
+            "status": "llm ok",
+            "response": response.content[:500]  # First 500 chars
+        }
+    except Exception as e:
+        print(f"❌ LLM error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "llm failed", "error": str(e)}
+
+@app.post("/debug/search-then-llm")
+def debug_search_then_llm(req: ChatRequest):
+    """Test FAISS search + LLM"""
+    print("🔵 DEBUG SEARCH + LLM START")
+    try:
+        print("🔵 Step 1: Search...")
+        results = search_similar(req.message, top_k=3)
+        print(f"✅ Search done: {len(results)} results")
+        
+        print("🔵 Step 2: Get LLM...")
+        llm = get_llm_model()
+        if not llm:
+            return {"status": "llm unavailable"}
+        
+        print("🔵 Step 3: Call LLM...")
+        prompt = f"Topic: {req.message}\nContext: {len(results)} found"
+        response = llm.invoke(prompt)
+        print(f"✅ LLM done")
+        
+        return {
+            "status": "ok",
+            "search_results": len(results),
+            "llm_response": response.content[:300]
+        }
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "failed", "error": str(e)}
+
 # ==================== BULK INGESTION FUNCTION ====================
 
 def process_pdf(file_path: str, subject: str, year: str = None) -> dict:
@@ -429,6 +509,17 @@ Rules:
     structured = structure_llm_output(raw_response, return_format="json")
     
     return structured
+
+
+@app.post("/chat-test")
+async def chat_test(req: ChatRequest):
+    """Simple /chat alternative - returns fast if issues exist"""
+    print(f"🔵 CHAT-TEST: {req.message[:50]}")
+    return {
+        "reply": {"formatted_markdown": "Test response - real /chat working check"},
+        "thinking": None,
+        "student_data": None
+    }
 
 
 @app.post("/chat")
