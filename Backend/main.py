@@ -19,6 +19,7 @@ from services.query_service import answer_query
 from services.analytics import get_most_asked_questions, get_subjects_stats, get_question_count, get_most_asked_topics, get_analyzed_questions
 from services.response_formatter import structure_llm_output, clean_markdown
 from services.result_service import fetch_result, get_result_by_details
+from db import ensure_indexes
 
 # Load environment variables
 load_dotenv()
@@ -50,21 +51,20 @@ def get_llm_model():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle startup and shutdown with timeout to prevent hangs on Render"""
-    try:
-        print("⏳ Loading questions from database (30s timeout)...")
-        await asyncio.wait_for(
-            asyncio.to_thread(load_questions_from_db),
-            timeout=30.0
-        )
-        print("✅ DTU PYQ Assistant started successfully")
-    except asyncio.TimeoutError:
-        print("⚠️  Database loading timed out - starting in degraded mode")
-        print("💡 Search will fetch data on first request")
-    except Exception as e:
-        print(f"⚠️  Database loading failed: {str(e)[:100]}")
-        print("💡 App will load data on-demand")
-    
+    """Non-blocking startup so Render can detect open port quickly."""
+    async def warmup() -> None:
+        try:
+            print("⏳ Warmup: ensuring MongoDB indexes...")
+            await asyncio.to_thread(ensure_indexes)
+            print("⏳ Warmup: loading questions and FAISS index...")
+            await asyncio.to_thread(load_questions_from_db)
+            print("✅ Warmup completed")
+        except Exception as e:
+            print(f"⚠️  Warmup failed: {str(e)[:120]}")
+
+    asyncio.create_task(warmup())
+    print("✅ App startup complete (warmup running in background)")
+
     yield
     
     print("🛑 Shutting down DTU PYQ Assistant")
