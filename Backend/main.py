@@ -489,21 +489,36 @@ def format_mongodb_response(intercept_data: dict) -> dict:
             "key_points": [],
             "formatted_markdown": ""
         }
+
+    # Collect ACTUAL questions from topics
+    all_questions_list = []
+    for topic in topics[:15]:
+        for sample_q in topic.get("sample_questions", []):
             if sample_q not in all_questions_list:
                 all_questions_list.append(sample_q)
-    
+
     # Format questions as numbered list
     formatted_questions = "\n".join([
-        f"{i}. {q}" 
-        for i, q in enumerate(all_questions_list[:20], 1)  # Top 20 questions
+        f"{i}. {q}"
+        for i, q in enumerate(all_questions_list[:20], 1)
     ])
-    
+
+    prompt = f"""You are an exam assistant.
 
 Here are past year questions for {subject}:
 
+{formatted_questions}
+
 Task:
+Generate expected exam questions based on repeated patterns.
+
 Rules:
 - Focus on most repeated patterns
+- Do NOT explain concepts
+- ONLY output questions
+- Do not include thinking, reasoning traces, or <think> tags
+- Group into 3 categories:
+
 1. Most Expected (High frequency patterns - most likely to appear)
 2. Moderate (Medium frequency patterns)
 3. Concept-based (Varied patterns testing concepts)
@@ -531,18 +546,24 @@ Rules:
 - NO definitions
 - Concise format
 - Under 150 words total"""
-    
+
     print(f"\n🔥 EXAM PREDICTION ENGINE for {subject}")
     print(f"Analyzing {len(all_questions_list)} questions to predict exam patterns")
-    
+
     llm = get_llm_model()
     if not llm:
         return {"title": "Service Unavailable", "formatted_markdown": "LLM not available", "sections": []}
-    
-    response = invoke_llm_with_timeout_sync(llm, prompt, timeout_seconds=20)
+
+    response = invoke_llm_with_timeout_sync(llm, prompt, timeout_seconds=12)
     if response is None:
         return {"title": "Timeout", "formatted_markdown": "LLM request timed out", "sections": []}
+
     raw_response = response.content
+
+    # Structure the LLM response
+    structured = structure_llm_output(raw_response, return_format="json")
+
+    return structured
     
 
 @app.post("/chat-test")
@@ -585,6 +606,11 @@ async def chat(req: ChatRequest):
         # Detect query mode
         mode = detect_query_mode(req.message)
         print(f"📋 Query Mode: {mode}")
+
+        # Detect subject and force subject-aware retrieval
+        detected_subject = detect_subject(req.message)
+        if detected_subject:
+            print(f"📚 Subject detected: {detected_subject}")
         
         # ========== ANALYSIS MODE: Return frequency analysis ==========
         if mode == "analysis":
@@ -596,10 +622,23 @@ async def chat(req: ChatRequest):
                     "thinking": None,
                     "student_data": student_details if student_context else None
                 }
+            if detected_subject:
+                analyzed_data = get_analyzed_questions(subject=detected_subject, limit=10)
+                topics = analyzed_data.get("topics", [])
+                if topics:
+                    structured = format_mongodb_response({
+                        "subject": detected_subject,
+                        "data": analyzed_data,
+                    })
+                    return {
+                        "reply": structured,
+                        "thinking": None,
+                        "student_data": student_details if student_context else None
+                    }
         
         # Get similar questions for context
         print("🔵 Starting search_similar()...")
-        search_results = search_similar(req.message, top_k=10)
+        search_results = search_similar(req.message, top_k=10, subject=detected_subject)
         print(f"✅ Search completed: {len(search_results)} results")
         
         # ========== QUESTIONS MODE: Generate expected exam questions ==========
