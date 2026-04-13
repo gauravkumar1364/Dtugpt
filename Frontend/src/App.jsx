@@ -52,19 +52,38 @@ function App() {
     setinput("");
     setisLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch("https://dtugpt.onrender.com/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({ message: usermessage }),
       });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
       const data = await response.json();
       // Handle both new structured format and legacy string format
       const responseContent = data.reply?.title ? data.reply : (typeof data.reply === 'string' ? data.reply : data.reply?.formatted_markdown || data.reply);
       setmessages((prev)=>[...prev,{role:"assistant",content: responseContent, thinking:data.thinking}]);
     }catch (error) {
       console.error("Error sending message:", error);
+      const errorText = error?.name === "AbortError"
+        ? "Request timed out. Please try again."
+        : "Server is temporarily unavailable. Please try again.";
+
+      setmessages((prev) => [
+        ...prev,
+        { role: "assistant", content: errorText, thinking: null },
+      ]);
     } finally {
       setisLoading(false);
     }
