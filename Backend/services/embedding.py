@@ -79,38 +79,16 @@ def store_questions(subject: str, questions: list[str]) -> None:
 def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict]:
     """
     Search for similar questions using FAISS
-    Build index only once on first search
+    FAISS index is pre-built on startup (fast)
     """
-    global index, index_built, questions_db
+    global index, questions_db
     
     if len(questions_db) == 0:
         return []
     
-    # Build FAISS index only once on first search
-    if not index_built:
-        print("⏳ Building FAISS index on first search...")
-        try:
-            index = faiss.IndexFlatL2(dimension)
-            
-            # Extract embeddings from questions_db
-            embeddings_to_add = []
-            for q in questions_db:
-                if "embedding" in q:
-                    embeddings_to_add.append(q["embedding"])
-            
-            if embeddings_to_add:
-                embeddings_array = np.array(embeddings_to_add, dtype=np.float32)
-                index.add(embeddings_array)
-                print(f"✅ FAISS index built with {len(embeddings_to_add)} embeddings")
-            else:
-                print("⚠️  No embeddings found in questions_db")
-                return []
-                
-        except Exception as e:
-            print(f"❌ Failed to build FAISS index: {e}")
-            return []
-        finally:
-            index_built = True
+    if not index_built or index is None:
+        print("⚠️  FAISS index not ready - skipping search")
+        return []
     
     # Get embedding model
     embed_model = get_embed_model()
@@ -121,7 +99,7 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
     # Encode query
     query_embedding = embed_model.encode([query])
     
-    # Search in FAISS (get more results to account for filtering)
+    # Search in FAISS
     search_k = min(top_k * 3 if subject else top_k, len(questions_db))
     
     try:
@@ -150,15 +128,14 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
 
 def load_questions_from_db() -> None:
     """
-    Load all questions from MongoDB into memory on startup
-    FAISS index will be built on first search request
+    Load all questions from MongoDB into memory AND build FAISS index on startup
+    This prevents blocking on first /chat request
     """
-    global questions_db, index_built
+    global questions_db, index, index_built
     
     try:
         print("⏳ Loading questions from MongoDB...")
         questions_db.clear()
-        index_built = False  # Reset index flag so it rebuilds on first search
         
         all_questions = list(questions_collection.find({}, {"_id": 0}))
         
@@ -166,10 +143,48 @@ def load_questions_from_db() -> None:
             print("ℹ️  No questions in MongoDB yet")
             return
         
-        # Load into memory - FAISS index will build on first search
+        # Load into memory
         questions_db = all_questions
-        print(f"✅ Loaded {len(all_questions)} questions into memory (FAISS will build on first search)")
+        print(f"✅ Loaded {len(all_questions)} questions into memory")
+        
+        # Build FAISS index NOW (on startup, not on first request)
+        print("⏳ Building FAISS index...")
+        build_faiss_index()
         
     except Exception as e:
         print(f"⚠️  Error loading questions on startup: {e}")
         print("💡 Questions will load from MongoDB on-demand")
+
+
+def build_faiss_index() -> None:
+    """
+    Build FAISS index from questions_db
+    Called during startup to prevent blocking on first request
+    """
+    global index, index_built, questions_db
+    
+    try:
+        if len(questions_db) == 0:
+            print("⚠️  No questions to index")
+            return
+        
+        # Extract embeddings
+        embeddings_to_add = []
+        for q in questions_db:
+            if "embedding" in q:
+                embeddings_to_add.append(q["embedding"])
+        
+        if embeddings_to_add:
+            # Create fresh index
+            index = faiss.IndexFlatL2(dimension)
+            embeddings_array = np.array(embeddings_to_add, dtype=np.float32)
+            index.add(embeddings_array)
+            index_built = True
+            print(f"✅ FAISS index built with {len(embeddings_to_add)} embeddings")
+        else:
+            print("⚠️  No embeddings found in questions_db - FAISS skipped")
+            index_built = False
+            
+    except Exception as e:
+        print(f"❌ Failed to build FAISS index: {e}")
+        index_built = False

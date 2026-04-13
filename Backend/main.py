@@ -440,7 +440,10 @@ async def chat(req: ChatRequest):
     3. Explanation Mode - provide concept explanations and details
     """
     try:
+        print(f"🔵 CHAT STARTED: {req.message[:50]}")
+        
         # FEATURE 1: Extract roll number and fetch student details
+        print("🔵 Extracting roll number...")
         student_roll_info = extract_roll_number(req.message)
         student_details = None
         student_context = ""
@@ -470,7 +473,9 @@ async def chat(req: ChatRequest):
                 }
         
         # Get similar questions for context
+        print("🔵 Starting search_similar()...")
         search_results = search_similar(req.message, top_k=10)
+        print(f"✅ Search completed: {len(search_results)} results")
         
         # ========== QUESTIONS MODE: Generate expected exam questions ==========
         if mode == "questions":
@@ -531,7 +536,9 @@ Rules:
             if not llm:
                 return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
             
+            print("🔵 Invoking LLM for questions mode...")
             response = llm.invoke(questions_prompt)
+            print("✅ LLM response received")
             raw_text = response.content
         
         # ========== EXPLANATION MODE: Provide concept explanation ==========
@@ -571,7 +578,9 @@ Format:
             if not llm:
                 return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
             
+            print("🔵 Invoking LLM for explanation mode...")
             response = llm.invoke(explanation_prompt)
+            print("✅ LLM response received")
             raw_text = response.content
 
         # Extract and remove thinking if present
@@ -580,8 +589,10 @@ Format:
         thinking_text = thinking.group(1).strip() if thinking else None
 
         # Structure the response
+        print("🔵 Structuring response...")
         structured = structure_llm_output(cleaned, return_format="json")
 
+        print("✅ CHAT COMPLETED - Returning response")
         return {
             "reply": structured,
             "thinking": thinking_text,
