@@ -59,10 +59,10 @@ def get_llm_model():
             return None
         try:
             llm_model = ChatGroq(
-                model="qwen/qwen3-32b",
-                max_tokens=1024,
-                temperature=0.7,
-                timeout=20,
+                model="llama-3.1-8b-instant",
+                max_tokens=320,
+                temperature=0.2,
+                timeout=12,
                 max_retries=1,
             )
             print("✅ LLM initialized")
@@ -627,6 +627,7 @@ Rules:
 - Focus on most repeated patterns
 - Do NOT explain concepts
 - ONLY output questions
+- Do not include thinking, reasoning traces, or <think> tags
 - Group into:
    1. Most Expected (High frequency)
    2. Moderate (Medium frequency)
@@ -659,7 +660,7 @@ Rules:
                 return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
             
             print("🔵 Invoking LLM for questions mode...")
-            response = invoke_llm_with_timeout_sync(llm, questions_prompt, timeout_seconds=20)
+            response = invoke_llm_with_timeout_sync(llm, questions_prompt, timeout_seconds=12)
             if response is None:
                 return {"reply": {"formatted_markdown": "LLM timeout, please try again."}, "thinking": None, "student_data": student_details if student_context else None}
             print("✅ LLM response received")
@@ -696,6 +697,7 @@ Format:
 - Use bullet points for clarity
 - Bold important terms
 - Keep it under 300 words
+- Do not include thinking, reasoning traces, or <think> tags
 - Make it student-friendly"""
             
             llm = get_llm_model()
@@ -703,7 +705,7 @@ Format:
                 return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
             
             print("🔵 Invoking LLM for explanation mode...")
-            response = invoke_llm_with_timeout_sync(llm, explanation_prompt, timeout_seconds=20)
+            response = invoke_llm_with_timeout_sync(llm, explanation_prompt, timeout_seconds=12)
             if response is None:
                 return {"reply": {"formatted_markdown": "LLM timeout, please try again."}, "thinking": None, "student_data": student_details if student_context else None}
             print("✅ LLM response received")
@@ -712,7 +714,7 @@ Format:
         # Extract and remove thinking if present
         thinking = re.search(r"<think>([\s\S]*?)</think>", raw_text)
         cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-        thinking_text = thinking.group(1).strip() if thinking else None
+        thinking_text = None
 
         # Structure the response
         print("🔵 Structuring response...")
