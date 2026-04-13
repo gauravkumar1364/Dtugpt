@@ -351,6 +351,25 @@ def detect_subject(message: str) -> Optional[str]:
     return None
 
 
+def is_small_talk(message: str) -> bool:
+    """Detect casual non-academic messages that should not invoke LLM."""
+    msg = (message or "").strip().lower()
+    small_talk_patterns = {
+        "hi", "hello", "hey", "yo", "hii", "heyy",
+        "how are you", "what's up", "whats up", "good morning",
+        "good afternoon", "good evening", "thanks", "thank you",
+    }
+
+    if msg in small_talk_patterns:
+        return True
+
+    # Very short greeting-like inputs should skip expensive inference.
+    if len(msg.split()) <= 2 and any(token in msg for token in ["hi", "hello", "hey"]):
+        return True
+
+    return False
+
+
 def get_context_for_detailed(query: str) -> str:
     """
     For detailed mode, search for similar questions to use as context
@@ -587,6 +606,19 @@ async def chat(req: ChatRequest):
     """
     try:
         print(f"🔵 CHAT STARTED: {req.message[:50]}")
+
+        # Instant non-LLM response for greetings/small-talk
+        if is_small_talk(req.message):
+            return {
+                "reply": {
+                    "formatted_markdown": (
+                        "Hi! I am DTU GPT. Ask me about PYQs, important topics, or expected questions "
+                        "for subjects like FOM, DBMS, ITC, DSA, OS, etc."
+                    )
+                },
+                "thinking": None,
+                "student_data": None,
+            }
         
         # FEATURE 1: Extract roll number and fetch student details
         print("🔵 Extracting roll number...")
