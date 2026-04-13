@@ -8,6 +8,29 @@ from db import questions_collection
 # Lazy-load embedding model to prevent Render startup hangs
 embed_model = None
 
+SUBJECT_ALIASES = {
+    "fom": ["fom", "fundamentals of management", "fundamental of management", "management"],
+    "dbms": ["dbms", "database management system", "database"],
+    "itc": ["itc", "internet technologies", "internet technology"],
+    "dsa": ["dsa", "data structures", "data structure", "algorithm", "algorithms"],
+    "os": ["os", "operating system", "operating systems"],
+    "coa": ["coa", "computer organization", "computer architecture"],
+    "se": ["se", "software engineering"],
+    "oops": ["oops", "oop", "object oriented", "object-oriented"],
+    "cn": ["cn", "computer networks", "networking"],
+}
+
+
+def _subject_matches(doc_subject: str, requested_subject: str) -> bool:
+    """Robust subject matching for both code and full-name variants."""
+    if not requested_subject:
+        return True
+
+    doc = (doc_subject or "").lower()
+    req = requested_subject.lower()
+    aliases = SUBJECT_ALIASES.get(req, [req])
+    return any(alias in doc for alias in aliases)
+
 
 def _run_with_timeout(func, timeout_seconds: int, *args, **kwargs):
     """Run blocking work in daemon thread with timeout.
@@ -65,7 +88,7 @@ def _keyword_fallback_search(query: str, top_k: int, subject: str = None) -> lis
 
     scored = []
     for doc in questions_db:
-        if subject and subject.lower() not in doc.get("subject", "").lower():
+        if subject and not _subject_matches(doc.get("subject", ""), subject):
             continue
         text = doc.get("question", "")
         doc_tokens = set(re.findall(r"[a-zA-Z0-9]+", text.lower()))
@@ -174,7 +197,7 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
             doc = questions_db[idx]
             
             # Subject filter (substring match, case-insensitive)
-            if subject and subject.lower() not in doc.get("subject", "").lower():
+            if subject and not _subject_matches(doc.get("subject", ""), subject):
                 continue
             
             results.append(doc)

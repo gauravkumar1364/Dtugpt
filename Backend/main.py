@@ -327,6 +327,29 @@ def detect_query_mode(message: str) -> str:
     # Default is explanation mode
     return "explanation"
 
+def detect_subject(message: str) -> Optional[str]:
+    """Detect subject from user query and return canonical subject key."""
+    msg_lower = message.lower()
+
+    subject_keywords = {
+        "fom": ["fom", "fundamentals of management", "fundamental of management", "management"],
+        "dbms": ["dbms", "database management system", "database"],
+        "itc": ["itc", "internet technologies", "internet technology"],
+        "dsa": ["dsa", "data structures", "data structure", "algorithm", "algorithms"],
+        "os": ["os", "operating system", "operating systems"],
+        "coa": ["coa", "computer organization", "computer architecture"],
+        "se": ["se", "software engineering"],
+        "oops": ["oops", "oop", "object oriented", "object-oriented"],
+        "cn": ["cn", "computer networks", "networking"],
+    }
+
+    for subject_key, keywords in subject_keywords.items():
+        for keyword in keywords:
+            if re.search(rf"\b{re.escape(keyword)}\b", msg_lower):
+                return subject_key
+
+    return None
+
 
 def get_context_for_detailed(query: str) -> str:
     """
@@ -466,11 +489,6 @@ def format_mongodb_response(intercept_data: dict) -> dict:
             "key_points": [],
             "formatted_markdown": ""
         }
-    
-    # Collect ACTUAL questions from topics
-    all_questions_list = []
-    for topic in topics[:15]:  # Get up to 15 topics
-        for sample_q in topic.get("sample_questions", []):
             if sample_q not in all_questions_list:
                 all_questions_list.append(sample_q)
     
@@ -480,22 +498,12 @@ def format_mongodb_response(intercept_data: dict) -> dict:
         for i, q in enumerate(all_questions_list[:20], 1)  # Top 20 questions
     ])
     
-    # Build prompt - EXAM PREDICTION ENGINE focused on generating questions
-    prompt = f"""You are an exam assistant.
 
 Here are past year questions for {subject}:
 
-{formatted_questions}
-
 Task:
-Generate expected exam questions based on repeated patterns.
-
 Rules:
 - Focus on most repeated patterns
-- Do NOT explain concepts
-- ONLY output questions
-- Group into 3 categories:
-
 1. Most Expected (High frequency patterns - most likely to appear)
 2. Moderate (Medium frequency patterns)
 3. Concept-based (Varied patterns testing concepts)
@@ -536,11 +544,6 @@ Rules:
         return {"title": "Timeout", "formatted_markdown": "LLM request timed out", "sections": []}
     raw_response = response.content
     
-    # Structure the LLM response
-    structured = structure_llm_output(raw_response, return_format="json")
-    
-    return structured
-
 
 @app.post("/chat-test")
 async def chat_test(req: ChatRequest):
@@ -616,6 +619,8 @@ async def chat(req: ChatRequest):
 
 Topic: {req.message}
 
+Subject Focus: {detected_subject or 'general'}
+
 Here are related past year questions:
 
 {questions_text}
@@ -627,6 +632,7 @@ Rules:
 - Focus on most repeated patterns
 - Do NOT explain concepts
 - ONLY output questions
+- Keep questions strictly within subject focus: {detected_subject or 'general'}
 - Do not include thinking, reasoning traces, or <think> tags
 - Group into:
    1. Most Expected (High frequency)
@@ -683,6 +689,8 @@ Rules:
 
 Topic: {req.message}
 
+Subject Focus: {detected_subject or 'general'}
+
 Related past year questions:
 {context_questions}
 
@@ -698,6 +706,7 @@ Format:
 - Bold important terms
 - Keep it under 300 words
 - Do not include thinking, reasoning traces, or <think> tags
+- Keep explanation strictly within subject focus: {detected_subject or 'general'}
 - Make it student-friendly"""
             
             llm = get_llm_model()
