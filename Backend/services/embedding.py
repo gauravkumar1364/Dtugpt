@@ -35,6 +35,12 @@ def _run_with_timeout(func, timeout_seconds: int, *args, **kwargs):
 def get_embed_model():
     """Lazy-initialize embedding model on first use"""
     global embed_model
+
+    # Render free instances can crash on model download/load; default to fallback search.
+    if os.getenv("RENDER", "").lower() == "true" and os.getenv("ENABLE_EMBEDDINGS", "false").lower() != "true":
+        print("ℹ️  Embeddings disabled on Render (using keyword fallback)")
+        return None
+
     if embed_model is None:
         try:
             from sentence_transformers import SentenceTransformer
