@@ -1,6 +1,7 @@
 import os
 import re
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from typing import Optional
 from pathlib import Path
@@ -27,6 +28,28 @@ load_dotenv()
 # Lazy-initialize LLM to prevent startup crashes
 llm_model = None
 
+
+def invoke_llm_with_timeout_sync(llm, prompt: str, timeout_seconds: int = 20):
+    """Run llm.invoke with a hard timeout to avoid hanging requests."""
+    result = {"response": None, "error": None}
+
+    def worker():
+        try:
+            result["response"] = llm.invoke(prompt)
+        except Exception as e:
+            result["error"] = e
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+
+    if thread.is_alive():
+        print(f"⚠️  LLM invoke timed out after {timeout_seconds}s")
+        return None
+    if result["error"] is not None:
+        raise result["error"]
+    return result["response"]
+
 def get_llm_model():
     """Lazy-initialize LLM (prevents crashes if API key missing)"""
     global llm_model
@@ -38,7 +61,9 @@ def get_llm_model():
             llm_model = ChatGroq(
                 model="qwen/qwen3-32b",
                 max_tokens=1024,
-                temperature=0.7
+                temperature=0.7,
+                timeout=20,
+                max_retries=1,
             )
             print("✅ LLM initialized")
         except Exception as e:
@@ -132,7 +157,9 @@ def debug_llm(req: ChatRequest):
         
         print("🔵 Calling LLM.invoke()...")
         prompt = f"Answer briefly: {req.message}"
-        response = llm.invoke(prompt)
+        response = invoke_llm_with_timeout_sync(llm, prompt, timeout_seconds=20)
+        if response is None:
+            return {"status": "llm timeout", "error": "LLM call exceeded timeout"}
         print(f"✅ LLM response received: {len(response.content)} chars")
         
         return {
@@ -161,7 +188,9 @@ def debug_search_then_llm(req: ChatRequest):
         
         print("🔵 Step 3: Call LLM...")
         prompt = f"Topic: {req.message}\nContext: {len(results)} found"
-        response = llm.invoke(prompt)
+        response = invoke_llm_with_timeout_sync(llm, prompt, timeout_seconds=20)
+        if response is None:
+            return {"status": "llm timeout", "search_results": len(results)}
         print(f"✅ LLM done")
         
         return {
@@ -502,7 +531,9 @@ Rules:
     if not llm:
         return {"title": "Service Unavailable", "formatted_markdown": "LLM not available", "sections": []}
     
-    response = llm.invoke(prompt)
+    response = invoke_llm_with_timeout_sync(llm, prompt, timeout_seconds=20)
+    if response is None:
+        return {"title": "Timeout", "formatted_markdown": "LLM request timed out", "sections": []}
     raw_response = response.content
     
     # Structure the LLM response
@@ -628,7 +659,9 @@ Rules:
                 return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
             
             print("🔵 Invoking LLM for questions mode...")
-            response = llm.invoke(questions_prompt)
+            response = invoke_llm_with_timeout_sync(llm, questions_prompt, timeout_seconds=20)
+            if response is None:
+                return {"reply": {"formatted_markdown": "LLM timeout, please try again."}, "thinking": None, "student_data": student_details if student_context else None}
             print("✅ LLM response received")
             raw_text = response.content
         
@@ -670,7 +703,9 @@ Format:
                 return {"reply": {"formatted_markdown": "LLM unavailable"}, "thinking": None, "student_data": student_details if student_context else None}
             
             print("🔵 Invoking LLM for explanation mode...")
-            response = llm.invoke(explanation_prompt)
+            response = invoke_llm_with_timeout_sync(llm, explanation_prompt, timeout_seconds=20)
+            if response is None:
+                return {"reply": {"formatted_markdown": "LLM timeout, please try again."}, "thinking": None, "student_data": student_details if student_context else None}
             print("✅ LLM response received")
             raw_text = response.content
 

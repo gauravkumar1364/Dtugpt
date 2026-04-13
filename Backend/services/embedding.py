@@ -1,10 +1,36 @@
 import numpy as np
 import os
 import faiss
+import re
+import threading
 from db import questions_collection
 
 # Lazy-load embedding model to prevent Render startup hangs
 embed_model = None
+
+
+def _run_with_timeout(func, timeout_seconds: int, *args, **kwargs):
+    """Run blocking work in daemon thread with timeout.
+
+    Returns None on timeout/failure to keep request paths non-blocking.
+    """
+    result = {"value": None, "error": None}
+
+    def worker():
+        try:
+            result["value"] = func(*args, **kwargs)
+        except Exception as e:
+            result["error"] = e
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+
+    if thread.is_alive():
+        return None
+    if result["error"] is not None:
+        return None
+    return result["value"]
 
 def get_embed_model():
     """Lazy-initialize embedding model on first use"""
@@ -13,12 +39,36 @@ def get_embed_model():
         try:
             from sentence_transformers import SentenceTransformer
             print("⏳ Loading embedding model (first use - cached after)...")
-            embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+            loaded_model = _run_with_timeout(SentenceTransformer, 20, "all-MiniLM-L6-v2")
+            if loaded_model is None:
+                print("⚠️  Embedding model load timed out")
+                return None
+            embed_model = loaded_model
             print("✅ Embedding model loaded")
         except Exception as e:
             print(f"❌ Failed to load embedding model: {e}")
             return None
     return embed_model
+
+
+def _keyword_fallback_search(query: str, top_k: int, subject: str = None) -> list[dict]:
+    """Fallback lexical search when embedding model is unavailable/slow."""
+    query_tokens = set(re.findall(r"[a-zA-Z0-9]+", (query or "").lower()))
+    if not query_tokens:
+        return []
+
+    scored = []
+    for doc in questions_db:
+        if subject and subject.lower() not in doc.get("subject", "").lower():
+            continue
+        text = doc.get("question", "")
+        doc_tokens = set(re.findall(r"[a-zA-Z0-9]+", text.lower()))
+        score = len(query_tokens.intersection(doc_tokens))
+        if score > 0:
+            scored.append((score, doc))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [doc for _, doc in scored[:top_k]]
 
 # FAISS index - lazy-built on first search
 dimension = 384
@@ -93,11 +143,14 @@ def search_similar(query: str, top_k: int = 5, subject: str = None) -> list[dict
     # Get embedding model
     embed_model = get_embed_model()
     if not embed_model:
-        print("⚠️  Embedding model unavailable - search disabled")
-        return []
+        print("⚠️  Embedding model unavailable - using keyword fallback")
+        return _keyword_fallback_search(query, top_k, subject)
     
     # Encode query
-    query_embedding = embed_model.encode([query])
+    query_embedding = _run_with_timeout(embed_model.encode, 10, [query])
+    if query_embedding is None:
+        print("⚠️  Query embedding timed out - using keyword fallback")
+        return _keyword_fallback_search(query, top_k, subject)
     
     # Search in FAISS
     search_k = min(top_k * 3 if subject else top_k, len(questions_db))
