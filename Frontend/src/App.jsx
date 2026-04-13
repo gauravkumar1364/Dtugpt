@@ -115,15 +115,43 @@ function App() {
 
   return (
     <div className="bg-[#0b0b0b] text-[#e5e5e5] w-full h-screen flex flex-col">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="sm:hidden fixed top-3 left-3 z-50 p-2 rounded-full bg-[#171717] border border-[#2a2a2a] text-white"
+        aria-label="Toggle Sidebar"
+      >
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h16M4 18h16"
+          />
+        </svg>
+      </button>
+
+      {isExpanded && (
+        <div
+          className="sm:hidden fixed inset-0 bg-black/40 z-30"
+          onClick={() => setIsExpanded(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <div className="flex flex-1 overflow-hidden font-sans bg-[#0b0b0b]">
         {/* --- Sidebar Container --- */}
         <div
-          className={`bg-[#050505] text-white transition-all duration-300 ease-in-out flex flex-col overflow-hidden border-r border-[#161616] shadow-[2px_0_18px_rgba(0,0,0,0.35)] ${
-            isExpanded ? "w-64" : "w-16"
+          className={`bg-[#050505] text-white transition-all duration-300 ease-in-out flex flex-col overflow-hidden border-r border-[#161616] shadow-[2px_0_18px_rgba(0,0,0,0.35)] fixed sm:static top-0 left-0 h-full z-40 sm:z-auto ${
+            isExpanded ? "w-64 translate-x-0" : "w-64 -translate-x-full sm:w-16 sm:translate-x-0"
           }`}
         >
           {/* Toggle Button Area */}
-          <div className="flex items-center justify-center h-16 border-b border-[#161616]">
+          <div className="hidden sm:flex items-center justify-center h-16 border-b border-[#161616]">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className="p-2 rounded-full hover:bg-[#171717]"
@@ -212,11 +240,11 @@ function App() {
         <div className="flex-1 p-5 text-[#d6d6d6] bg-[#111111] text-xl flex flex-col min-w-0">
           <nav className="border-b border-[#252525] mb-5 p-5 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
             <ul className="flex justify-between items-center">
-              <li className="font-semibold tracking-wide text-sm text-[#bfbfbf]">DTU GPT</li>
-              <li className="flex items-center gap-3">
+              <li className="font-semibold tracking-wide text-sm text-[#bfbfbf] pl-10 sm:pl-0">DTU GPT</li>
+              <li className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
                 {/* Clerk Auth UI */}
                 <Show when="signed-out">
-                  <div className="flex gap-3">
+                  <div className="flex gap-2 sm:gap-3 flex-wrap justify-end">
                     <SignInButton 
                       mode="modal"
                       forceRedirectUrl="/"
@@ -273,7 +301,7 @@ function App() {
                   key={index}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div className="max-w-xs lg:max-w-md xl:max-w-lg">
+                  <div className="max-w-[85vw] sm:max-w-xs lg:max-w-md xl:max-w-lg">
                   <div
                       className={`px-4 py-2 rounded-lg ${
                         msg.role === "user"
@@ -322,7 +350,7 @@ function App() {
             )}
           </div>
           
-          <div className="p-4 flex flex-col gap-3 justify-center items-center">
+          <div className="p-2 sm:p-4 flex flex-col gap-3 justify-center items-center">
             {/* File Preview Area */}
             {selectedFile && (
               <div className="flex justify-center w-full">
@@ -367,7 +395,7 @@ function App() {
               </div>
             )}
             
-            <div className="flex gap-3 bg-[#111111] border border-[#1f1f1f] rounded-full w-full max-w-3xl px-4 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="flex gap-2 sm:gap-3 bg-[#111111] border border-[#1f1f1f] rounded-xl sm:rounded-full w-full max-w-3xl px-3 sm:px-4 py-2 sm:py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
               {/* File Upload Button */}
               <FileUpload selectedFile={selectedFile} setSelectedFile={setSelectedFile} onUpload={handleFileUpload} />
               <textarea
