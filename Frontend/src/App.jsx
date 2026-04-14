@@ -3,7 +3,7 @@ import "./App.css";
 import FileUpload from "./file_upload";
 import MessageDisplay from "./MessageDisplay";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
-
+import { Analytics } from '@vercel/analytics/react';
 function App() {
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -115,6 +115,7 @@ function App() {
 
   return (
     <div className="bg-[#0b0b0b] text-[#e5e5e5] w-full h-screen flex flex-col">
+      <Analytics />
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="sm:hidden fixed top-3 left-3 z-50 p-2 rounded-full bg-[#171717] border border-[#2a2a2a] text-white"
