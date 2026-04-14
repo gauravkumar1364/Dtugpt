@@ -35,10 +35,10 @@ def get_db():
 def ensure_indexes() -> None:
 	"""Create MongoDB indexes when the app is ready (avoid blocking imports)."""
 	try:
-		if not questions_collection:
+		if questions_collection is None:
 			get_db()
 		
-		if questions_collection:
+		if questions_collection is not None:
 			questions_collection.create_index("subject")
 			questions_collection.create_index("question")
 			processed_files.create_index("file_path")

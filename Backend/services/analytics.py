@@ -62,7 +62,7 @@ def get_analyzed_questions(subject: str = None, limit: int = 10) -> dict:
     Returns structured data for LLM analysis
     """
     questions_collection = get_db()
-    if not questions_collection:
+    if questions_collection is None:
         return {"topics": [], "most_asked": [], "frequency_analysis": {}, "total_questions": 0, "unique_topics": 0}
     
     query = {}
@@ -167,7 +167,7 @@ def get_most_asked_topics(subject: str = None, limit: int = 10) -> list[dict]:
     Groups semantically similar questions together
     """
     questions_collection = get_db()
-    if not questions_collection:
+    if questions_collection is None:
         return []
     
     # Get questions from DB
@@ -212,7 +212,7 @@ def get_most_asked_questions(subject: str = None, limit: int = 10) -> list[dict]
     Get most frequently asked questions, optionally filtered by subject
     """
     questions_collection = get_db()
-    if not questions_collection:
+    if questions_collection is None:
         return []
     
     query = {}
@@ -251,7 +251,7 @@ def get_subjects_stats() -> list[dict]:
     Get statistics per subject
     """
     questions_collection = get_db()
-    if not questions_collection:
+    if questions_collection is None:
         return []
     
     # Aggregate by subject
@@ -277,7 +277,7 @@ def get_question_count() -> int:
     Get total question count
     """
     questions_collection = get_db()
-    if not questions_collection:
+    if questions_collection is None:
         return 0
     
     return questions_collection.count_documents({})

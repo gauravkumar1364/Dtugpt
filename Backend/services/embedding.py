@@ -227,7 +227,7 @@ def load_questions_from_db() -> None:
         
         # Get database collection
         questions_collection = get_db()
-        if not questions_collection:
+        if questions_collection is None:
             print("⚠️  MongoDB unavailable, skipping DB load")
             return
         
