@@ -3,7 +3,7 @@ import os
 import faiss
 import re
 import threading
-from db import questions_collection
+from db import get_db
 
 # Lazy-load embedding model to prevent Render startup hangs
 embed_model = None
@@ -126,6 +126,12 @@ def store_questions(subject: str, questions: list[str]) -> None:
     # Generate embeddings
     embeddings = embed_model.encode(questions)
     
+    # Get database collection
+    questions_collection = get_db()
+    if not questions_collection:
+        print("⚠️  MongoDB unavailable, skipping DB storage")
+        return
+    
     # Store in memory and FAISS
     for i, q in enumerate(questions):
         # Check for duplicates in MongoDB
@@ -218,6 +224,12 @@ def load_questions_from_db() -> None:
     try:
         print("⏳ Loading questions from MongoDB...")
         questions_db.clear()
+        
+        # Get database collection
+        questions_collection = get_db()
+        if not questions_collection:
+            print("⚠️  MongoDB unavailable, skipping DB load")
+            return
         
         all_questions = list(questions_collection.find({}, {"_id": 0}))
         

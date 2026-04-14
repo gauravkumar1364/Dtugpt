@@ -77,22 +77,29 @@ def get_llm_model():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Non-blocking startup so Render can detect open port quickly."""
-    async def warmup() -> None:
-        try:
-            print("⏳ Warmup: ensuring MongoDB indexes...")
-            await asyncio.to_thread(ensure_indexes)
-            print("⏳ Warmup: loading questions and FAISS index...")
-            await asyncio.to_thread(load_questions_from_db)
-            print("✅ Warmup completed")
-        except Exception as e:
-            print(f"⚠️  Warmup failed: {str(e)[:120]}")
+    try:
+        async def warmup() -> None:
+            try:
+                print("⏳ Warmup: ensuring MongoDB indexes...")
+                await asyncio.to_thread(ensure_indexes)
+                print("⏳ Warmup: loading questions and FAISS index...")
+                await asyncio.to_thread(load_questions_from_db)
+                print("✅ Warmup completed")
+            except Exception as e:
+                print(f"⚠️  Warmup failed: {str(e)[:120]}")
 
-    asyncio.create_task(warmup())
-    print("✅ App startup complete (warmup running in background)")
-
+        asyncio.create_task(warmup())
+        print("✅ App startup complete (warmup running in background)")
+    except Exception as e:
+        print(f"❌ Lifespan startup error (non-blocking): {e}")
+        # Don't crash app - just log and continue
+    
     yield
     
-    print("🛑 Shutting down DTU PYQ Assistant")
+    try:
+        print("🛑 Shutting down DTU PYQ Assistant")
+    except Exception as e:
+        print(f"❌ Shutdown error: {e}")
 
 # Initialize FastAPI with lifespan
 app = FastAPI(title="DTU PYQ Assistant", lifespan=lifespan)

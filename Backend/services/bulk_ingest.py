@@ -1,6 +1,5 @@
 import os
-from main import process_pdf  
-from db import processed_files
+from main import process_pdf
 
 BASE_FOLDER = "download"   
 

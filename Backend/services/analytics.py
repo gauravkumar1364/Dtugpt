@@ -1,4 +1,4 @@
-from db import questions_collection
+from db import get_db
 from collections import Counter, defaultdict
 import numpy as np
 from numpy import dot
@@ -61,6 +61,10 @@ def get_analyzed_questions(subject: str = None, limit: int = 10) -> dict:
     Get questions grouped by topic with frequency analysis
     Returns structured data for LLM analysis
     """
+    questions_collection = get_db()
+    if not questions_collection:
+        return {"topics": [], "most_asked": [], "frequency_analysis": {}, "total_questions": 0, "unique_topics": 0}
+    
     query = {}
     if subject:
         query = {"subject": {"$regex": subject, "$options": "i"}}
@@ -162,6 +166,10 @@ def get_most_asked_topics(subject: str = None, limit: int = 10) -> list[dict]:
     Get most repeated topics by clustering similar questions
     Groups semantically similar questions together
     """
+    questions_collection = get_db()
+    if not questions_collection:
+        return []
+    
     # Get questions from DB
     query = {}
     if subject:
@@ -203,6 +211,10 @@ def get_most_asked_questions(subject: str = None, limit: int = 10) -> list[dict]
     """
     Get most frequently asked questions, optionally filtered by subject
     """
+    questions_collection = get_db()
+    if not questions_collection:
+        return []
+    
     query = {}
     if subject:
         # Substring match for subject (case-insensitive)
@@ -238,6 +250,10 @@ def get_subjects_stats() -> list[dict]:
     """
     Get statistics per subject
     """
+    questions_collection = get_db()
+    if not questions_collection:
+        return []
+    
     # Aggregate by subject
     pipeline = [
         {"$group": {"_id": "$subject", "count": {"$sum": 1}}},
@@ -260,4 +276,8 @@ def get_question_count() -> int:
     """
     Get total question count
     """
+    questions_collection = get_db()
+    if not questions_collection:
+        return 0
+    
     return questions_collection.count_documents({})
