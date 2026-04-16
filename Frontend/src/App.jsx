@@ -53,7 +53,7 @@ function App() {
     setisLoading(true);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 45000);  // 45 seconds for backend search + LLM
 
       const response = await fetch("https://dtugpt.onrender.com/chat", {
         method: "POST",
