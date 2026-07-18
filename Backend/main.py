@@ -1080,11 +1080,11 @@ async def get_stats():
 
 @app.get("/health")
 async def health():
-    """Health check"""
-    return {
-        "status": "healthy",
-        "total_questions": get_question_count()
-    }
+    """
+    Health check - lightweight response for uptime monitoring
+    Returns immediately without depending on warmup state
+    """
+    return {"status": "ok"}
 
 
 @app.get("/status")

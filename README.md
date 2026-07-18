@@ -110,8 +110,26 @@ npm run dev
 
 ## 🚀 Deployment
 
-* Backend: Render
-* Frontend: Vercel 
+* Backend: Render (free tier)
+* Frontend: Vercel 
+
+### Known Limitations & Deployment Notes
+
+**Cold Start Behavior (Render Free Tier)**
+- The backend runs on Render's free tier, which automatically spins down the container after ~15 minutes of inactivity
+- First request after idle period may take 30-90 seconds to respond while the server wakes up
+- The frontend displays a "waking up" message during this time and automatically retries once if the initial request times out
+- Subsequent requests are fast (~2-5 seconds) once the server is warm
+
+**Embeddings & FAISS Fallback**
+- On Render's free tier, semantic embeddings (FAISS + SentenceTransformers) may be disabled by default to ensure reliability within resource limits
+- When embeddings are disabled (`ENABLE_EMBEDDINGS` env var not set), the system falls back to keyword-based search
+- This is a deliberate tradeoff: keyword search is less sophisticated but more reliable on constrained resources
+- To enable full semantic search on Render, set `ENABLE_EMBEDDINGS=true` in environment variables (may affect cold start time)
+
+**System Dependencies**
+- PDF OCR features (`pdf2image`, `pytesseract`) require system-level binaries (Poppler, Tesseract) to be installed on the deployment server
+- These dependencies are included for local development but may need additional setup on Render 
 
 ---
 

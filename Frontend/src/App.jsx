@@ -12,6 +12,8 @@ function App() {
   const [isLoading,setisLoading] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isFirstRequest, setIsFirstRequest] = useState(true);
+  const [isWakingUp, setIsWakingUp] = useState(false);
 
   // 📝 Load chat history from localStorage on component mount
   useEffect(() => {
@@ -51,9 +53,17 @@ function App() {
     setmessages((prev)=>[...prev,{role:"user",content:usermessage}]);
     setinput("");
     setisLoading(true);
+    
+    // Show "waking up" state for first request after idle
+    if (isFirstRequest) {
+      setIsWakingUp(true);
+    }
+    
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);  // 45 seconds for backend search + LLM
+      // Extended timeout for first request (cold start), normal timeout for subsequent requests
+      const timeoutMs = isFirstRequest ? 90000 : 45000;  // 90s for cold start, 45s normally
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const response = await fetch("https://dtugpt.onrender.com/chat", {
         method: "POST",
@@ -67,6 +77,37 @@ function App() {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        // If first request fails, retry once with extended timeout
+        if (isFirstRequest) {
+          console.log("First request failed, retrying with extended timeout...");
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 90000);
+          
+          try {
+            const retryResponse = await fetch("https://dtugpt.onrender.com/chat", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              signal: retryController.signal,
+              body: JSON.stringify({ message: usermessage }),
+            });
+            
+            clearTimeout(retryTimeoutId);
+            
+            if (!retryResponse.ok) {
+              throw new Error(`Request failed with status ${retryResponse.status}`);
+            }
+            
+            const data = await retryResponse.json();
+            const responseContent = data.reply?.title ? data.reply : (typeof data.reply === 'string' ? data.reply : data.reply?.formatted_markdown || data.reply);
+            setmessages((prev)=>[...prev,{role:"assistant",content: responseContent, thinking:data.thinking}]);
+            setIsFirstRequest(false);
+            return;
+          } catch (retryError) {
+            throw retryError;
+          }
+        }
         throw new Error(`Request failed with status ${response.status}`);
       }
 
@@ -74,10 +115,17 @@ function App() {
       // Handle both new structured format and legacy string format
       const responseContent = data.reply?.title ? data.reply : (typeof data.reply === 'string' ? data.reply : data.reply?.formatted_markdown || data.reply);
       setmessages((prev)=>[...prev,{role:"assistant",content: responseContent, thinking:data.thinking}]);
+      
+      // Mark that we've successfully completed first request
+      if (isFirstRequest) {
+        setIsFirstRequest(false);
+      }
     }catch (error) {
       console.error("Error sending message:", error);
       const errorText = error?.name === "AbortError"
-        ? "Request timed out. Please try again."
+        ? (isFirstRequest 
+            ? "Server is waking up but taking longer than expected. Please try again in a moment." 
+            : "Request timed out. Please try again.")
         : "Server is temporarily unavailable. Please try again.";
 
       setmessages((prev) => [
@@ -86,6 +134,7 @@ function App() {
       ]);
     } finally {
       setisLoading(false);
+      setIsWakingUp(false);
     }
   };
 
@@ -344,8 +393,15 @@ function App() {
             )}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-[#2d2d2d] text-[#e5e5e5] px-4 py-2 rounded-lg rounded-bl-none">
-                  <p className="text-sm">Typing...</p>
+                <div className="bg-[#2d2d2d] text-[#e5e5e5] px-4 py-2 rounded-lg rounded-bl-none max-w-md">
+                  {isWakingUp ? (
+                    <div className="text-sm">
+                      <p className="font-semibold mb-1">🔄 Waking up the server...</p>
+                      <p className="text-xs text-[#999999]">First load after idle can take up to 60 seconds. Please wait.</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm">Typing...</p>
+                  )}
                 </div>
               </div>
             )}

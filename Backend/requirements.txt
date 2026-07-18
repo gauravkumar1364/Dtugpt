@@ -1,24 +1,20 @@
 langchain 
-langchain-openai
 python-dotenv
 langchain-groq   
-langchain-google-genai  
-langgraph
 fastapi
 uvicorn
 pydantic
-langchain-deepseek
 pdfplumber
 python-multipart
 faiss-cpu 
 sentence-transformers 
+# pdf2image and pytesseract require system-level binaries (Poppler, Tesseract) on Render
 pytesseract
 pillow
 pdf2image
-sentence-transformers 
-faiss-cpu
 pymongo
 gdown 
 beautifulsoup4
 requests
+# selenium is used in services/result_service.py for JS-rendered pages
 selenium
